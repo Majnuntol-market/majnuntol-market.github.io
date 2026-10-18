@@ -163,3 +163,46 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .back{border:0;background:none;color:var(--accent);font:500 15px var(--display);cursor:pointer;padding:6px 0}
 .linkbox{font-family:var(--mono);font-size:12px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px;overflow-wrap:anywhere;user-select:all}
+/* vazifa rasmlari va baholash */
+.photo{padding:10px 14px;font-size:14px;background:var(--accent);color:var(--accent-fg)}
+.pbox{display:flex;flex-direction:column;gap:6px;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:8px}
+.plabel{font-size:13px;font-weight:500;overflow-wrap:anywhere}
+.prow{display:flex;gap:10px;align-items:flex-start}
+.thumb{flex:none;width:84px;height:84px;object-fit:cover;border-radius:10px;cursor:zoom-in;background:var(--track)}
+.pside{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.pside small{color:var(--muted);font-size:12px;font-family:var(--mono)}
+.glbl{font-size:13px;font-weight:500}
+.grades{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.grades button{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:8px;padding:7px 0;font:600 14px var(--mono);cursor:pointer;min-width:0}
+.grades button.on{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.grade{font-size:14px;color:var(--muted)}
+.grade.on{color:var(--accent)}
+.ghost.sm{align-self:flex-start;padding:6px 10px;font-size:13px}
+.pend{display:flex;flex-direction:column;gap:8px;background:var(--low-soft);border-radius:12px;padding:10px}
+.pend>b{font-size:14px;color:var(--low)}
+.gavg{font-size:14px;background:var(--soft);border-radius:10px;padding:8px 12px}
+.gavg b{font-family:var(--mono);color:var(--accent)}.gavg small{color:var(--muted)}
+.zoom{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.88);display:flex;align-items:center;justify-content:center;padding:16px}
+.zoom img{max-width:100%;max-height:100%;border-radius:8px}
+.zoom .zx{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));right:16px;width:40px;height:40px;border-radius:50%;border:0;background:rgba(255,255,255,.2);color:#fff;font-size:18px;cursor:pointer}
+.badge{align-self:flex-start;font-size:12px;font-weight:600;background:var(--low-soft);color:var(--low);border-radius:20px;padding:3px 10px}
+/* chat */
+.chat{display:flex;flex-direction:column;gap:6px;max-height:380px;min-height:120px;overflow-y:auto;background:var(--bg);border-radius:12px;padding:10px;overscroll-behavior:contain}
+.cday{align-self:center;font-size:11px;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:20px;padding:2px 10px;margin:4px 0}
+.msg{align-self:flex-start;max-width:82%;background:var(--card);border:1px solid var(--line);border-radius:14px 14px 14px 4px;padding:6px 10px;display:flex;flex-direction:column;gap:2px}
+.msg .mn{font-size:12px;font-weight:600;color:var(--accent)}
+.msg.boss .mn{color:var(--mid)}
+.msg .mt{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.4}
+.msg .mh{align-self:flex-end;font:500 11px var(--mono);color:var(--muted)}
+.msg.me{align-self:flex-end;background:var(--soft);border-color:transparent;border-radius:14px 14px 4px 14px}
+.msg.me .mn{display:none}
+.chatin{display:flex;gap:8px;align-items:flex-end}
+.chatin textarea{flex:1;min-height:44px;max-height:120px;resize:none}
+.chatin .btn{flex:none;width:48px;height:44px;padding:0;font-size:18px}
+/* telegram */
+.tgc .ih{display:flex;align-items:center;gap:12px}
+.tgc .bell{flex:none;width:44px;height:44px;border-radius:12px;background:var(--soft);display:flex;align-items:center;justify-content:center;font-size:22px}
+.tgc .it{display:flex;flex-direction:column;gap:2px}.tgc .it small{color:var(--muted);font-size:13px;line-height:1.4}
+.btn.tg{background:var(--tgb);color:#fff;text-decoration:none;display:block}
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px;line-height:1.45}
+.tgrow{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
