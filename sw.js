@@ -1,5 +1,5 @@
 /* Majnuntol: oddiy kesh, ilova tez ochilishi uchun */
-const C='mj-v5';
+const C='mj-v6';
 const CORE=['app.css','app.js','config.js','icon-192.png','apple-touch-icon.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(CORE).catch(()=>{})));self.skipWaiting()});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==C).map(x=>caches.delete(x)))));self.clients.claim()});
