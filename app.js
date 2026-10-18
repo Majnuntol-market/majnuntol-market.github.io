@@ -120,6 +120,30 @@ async function notify(title,body,tag){
     await reg.showNotification(title,{body,tag:tag||'mj',renotify:true,icon:PAGE.root+'icon-192.png',badge:PAGE.root+'icon-192.png',data:{url:location.href}})}catch(e){}
 }
 
+/* ---------- Yangilanish ---------- */
+// MUHIM: har safar ilova o'zgartirilganda APP_V va version.json dagi "v" bittaga oshiriladi.
+const APP_V=7;
+let updShown=false;
+async function checkUpdate(){
+  try{const r=await fetch(PAGE.root+'version.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
+    if(j&&j.v>APP_V&&!updShown)showUpdate(j)}catch(e){}
+}
+function showUpdate(j){
+  updShown=true;
+  const b=document.createElement('div');b.className='upd';b.setAttribute('role','alert');
+  b.innerHTML='<span class="ut"><b>'+(PAGE.mode==='admin'?'Panelning yangi versiyasi tayyor':'Rahbar ilovani yangiladi')+'</b><small></small></span><button class="btn">Yangilash</button>';
+  b.querySelector('small').textContent=j.note||"Yangi imkoniyatlar qo'shildi";
+  b.querySelector('button').onclick=e=>{e.target.disabled=true;e.target.textContent='Yangilanmoqda…';doUpdate()};
+  document.body.appendChild(b);buzz();
+  notify('🔄 Majnuntol yangilandi',(j.note||"Yangi imkoniyatlar qo'shildi")+'. Ilovani oching va "Yangilash" ni bosing.','update');
+}
+async function doUpdate(){
+  try{const reg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration();if(reg)await reg.update()}catch(e){}
+  try{const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)))}catch(e){}
+  location.reload();
+}
+if(PAGE.mode==='admin'){document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkUpdate()});setInterval(checkUpdate,60000)}
+
 /* ---------- PWA ---------- */
 let deferredPrompt=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;const b=$('instBtn');if(b)b.hidden=false;const s=$('instSteps');if(s)s.hidden=true});
@@ -466,10 +490,21 @@ function adminList(user){
    +'<section class="card"><h2>Xodimlar</h2><div id="slist"><p class="hint">Yuklanmoqda…</p></div></section>'
    +'<section class="card" id="feedCard"><h2>Bajarilgan vazifalar</h2><div id="ntA"></div><div id="feed"><p class="hint">Yuklanmoqda…</p></div></section>'
    +chatMarkup()
+   +'<section class="card"><h2>Ilova yangilanishi</h2><p class="hint" id="updInfo" style="color:var(--fg);line-height:1.5">Yuklanmoqda…</p><button class="btn" id="updSend" hidden>📢 Xodimlarga yangilanishni yuborish</button></section>'
    +'<section class="card"><h2>Ish tartibi</h2><p class="hint" style="color:var(--fg);line-height:1.5">Shoxjaxon va Hayrullo 06:30 – 19:00, Iqbolmirzo 09:30 – 22:00. Qo\'shimcha ish: kuniga 33 333 so\'m, oyiga ko\'pi bilan 1 000 000 so\'m.</p></section>'
    +'<button class="ghost" id="out" style="align-self:center">Chiqish</button></div><div class="toast" id="toast" hidden></div>';
   wireInstall();
   wireChat({uid:'admin',name:'Rahbar'});
+  db.collection('settings').doc('update').get().then(sn=>{
+    const d=sn.exists?sn.data():null,sent=d?d.v:0,I=$('updInfo'),B=$('updSend');if(!I)return;
+    if(sent>=APP_V){I.innerHTML='Xodimlar ilovasi eng oxirgi versiyada ✓ <small class="meta">(v'+APP_V+')</small>';return}
+    I.innerHTML='Yangi versiya tayyor (v'+APP_V+'). Tugmani bosing — har bir xodim ilovasida <b>"Yangilash"</b> so\'raladi, ular bosishi bilan ilova o\'zi yangilanadi.';
+    B.hidden=false;
+    B.onclick=async()=>{B.disabled=true;
+      try{await db.collection('settings').doc('update').set({v:APP_V,note:"Yangi imkoniyatlar qo'shildi. Yangilash tugmasini bosing",at:Date.now()});
+        B.hidden=true;I.innerHTML='Yuborildi ✓ Xodimlar ilovani ochganda <b>"Yangilash"</b> so\'raladi.';toast('📢 Yangilanish xodimlarga yuborildi')}
+      catch(e){B.disabled=false;toast(e&&e.code==='permission-denied'?'Yuborib bo\'lmadi: Firestore qoidalarini yangilang':'Yuborib bo\'lmadi, internetni tekshiring')}};
+  }).catch(()=>{const I=$('updInfo');if(I)I.textContent='Yangilanish holatini o\'qib bo\'lmadi. Firestore qoidalarini yangilang.'});
   $('out').onclick=()=>{stopChat();auth.signOut()};
   if(unsubList)unsubList();
   if(unsubPend){unsubPend();unsubPend=null}
@@ -546,8 +581,10 @@ function adminRoute(user){
 /* ---------- Start ---------- */
 function notReady(){$('app').innerHTML='<div class="wrap"><header><span class="shop">Majnuntol Market</span><h1>Sozlanmoqda</h1></header><section class="card"><p class="hint">Ilova hali Firebase\'ga ulanmagan. config.js faylini to\'ldiring.</p></section></div>'}
 document.addEventListener('DOMContentLoaded',()=>{
+  if(PAGE.mode==='admin')setTimeout(checkUpdate,1500);
   if(!initFirebase()){notReady();return}
-  if(PAGE.mode==='staff'){staffView(PAGE.id,false);return}
+  if(PAGE.mode==='staff'){staffView(PAGE.id,false);
+    db.collection('settings').doc('update').onSnapshot(sn=>{const d=sn.exists&&sn.data();if(d&&d.v>APP_V&&!updShown)showUpdate(d)},()=>{});return}
   if(PAGE.mode==='admin'){
     let user=null;
     auth.onAuthStateChanged(u=>{

@@ -48,5 +48,11 @@ service cloud.firestore {
         && (request.resource.data.uid != 'admin' || isOwner());
       allow update, delete: if isOwner();
     }
+
+    // Ilova yangilanishi: rahbar yuboradi, xodimlar o'qiydi
+    match /settings/update {
+      allow read: if true;
+      allow write: if isOwner();
+    }
   }
 }
