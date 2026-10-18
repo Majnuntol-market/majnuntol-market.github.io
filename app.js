@@ -151,7 +151,7 @@ function staffMarkup(withInstall,topbar){
   +(withInstall?'<section class="card tgc" id="ntCard" hidden><div class="ih"><span class="bell">🔔</span><span class="it"><b>Bildirishnomalarni yoqing</b><small>Rahbar vazifa berganda yoki chatga yozganda telefoningizda xabar chiqadi.</small></span></div><button class="btn" id="ntBtn">Bildirishnomalarni yoqish</button><p class="hint" id="ntHint">Telefon ruxsat so\'raganda <b>"Ruxsat berish"</b> ni bosing.</p></section>':'')
   +'<section class="card" id="clockCard"><div class="clock"><h2 id="hours">Ish vaqti</h2><span class="now" id="now">--:--</span></div><span class="state" id="state">…</span><div><div class="count" id="count">--:--:--</div><span class="countlbl" id="countlbl"></span></div><div class="bar"><i id="bar" style="width:0%"></i></div><div class="ticks"><span id="tk1"></span><span id="tk2"></span><span id="tk3"></span></div>'
   +'<div class="offer" id="offer" hidden><p><b>Ish vaqti tugadi. Qo\'shimcha ishga marhamat!</b><br>Qolib ishlashni xohlaysizmi? Javobingiz rahbarga yuboriladi.</p><div class="two" id="offerBtns"><button class="btn yes" id="yes">Ha, xohlayman</button><button class="btn no" id="no">Yo\'q, xohlamayman</button></div><div class="sent" id="sent" hidden></div></div></section>'
-  +'<section class="card" id="taskCard"><h2>'+(withInstall?'Vazifalarim':'Vazifalar')+'</h2><div id="pend"></div><div class="gavg" id="gavg" hidden></div><div class="tabs2"><button id="dToday" class="on">Bugun</button><button id="dTom">Ertaga</button></div><div class="prog" id="prog" hidden><span id="progTxt"></span><div class="bar"><i id="progBar" style="width:0%"></i></div></div><div class="tasks" id="tasks"></div><p class="hint" id="thint">Vazifani bajargach, <b>📷 Rasmga olib yuborish</b> tugmasini bosing — rasm darhol rahbarga boradi va u baho qo\'yadi.</p><div id="tedit"></div></section>'
+  +'<section class="card" id="taskCard"><h2>'+(withInstall?'Vazifalarim':'Vazifalar')+'</h2><div id="pend"></div><div class="gavg" id="gavg" hidden></div><div class="tabs2"><button id="dToday" class="on">Bugun</button><button id="dTom">Ertaga</button></div><div class="prog" id="prog" hidden><span id="progTxt"></span><div class="bar"><i id="progBar" style="width:0%"></i></div></div><div class="tasks" id="tasks"></div><p class="hint" id="thint">Vazifani bajargach, doirachani yoki <b>📷 Rasmga olib yuborish</b> tugmasini bosing — rasm to\'g\'ridan-to\'g\'ri rahbar paneliga tushadi va u baho qo\'yadi.</p><div id="tedit"></div></section>'
   +(withInstall?chatMarkup():'')
   +'<section class="card"><h2>Mening ish shijoatim</h2><div class="top"><div class="gauge"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="none" stroke="var(--track)" stroke-width="10"></circle><circle id="arc" cx="50" cy="50" r="40" fill="none" stroke="var(--muted)" stroke-width="10" stroke-linecap="round" stroke-dasharray="251.33" stroke-dashoffset="251.33"></circle></svg><span class="v" id="pct">—</span></div><div class="who"><span class="pill" id="lvl" style="background:var(--muted)">Baholanmagan</span><span class="trend" id="trend" hidden></span><span class="meta" id="last">Hali baho qo\'yilmagan</span><span class="meta">Foizni rahbar kuzatuv asosida belgilaydi.</span></div></div><p class="note" id="note" hidden></p><div id="histWrap" hidden><h2 style="margin-bottom:6px">Oxirgi baholar</h2><div class="hist" id="hist"></div></div><div id="editor"></div></section>'
   +'<section class="card"><h2>Ish va dam olish kunlari</h2><div class="wnav"><button id="wprev" aria-label="Oldingi oy">‹</button><b id="wname">Bu oy</b><button id="wnext" aria-label="Keyingi oy">›</button></div><span class="legend"><span><i class="wk"></i>Ishlagan</span><span><i class="rt"></i>Dam olgan</span></span><div class="wcal" id="wcal"></div><div class="wsum"><div class="ws"><small>Ishlagan kunlar</small><b id="wN">0</b></div><div class="rs"><small>Dam olgan kunlar</small><b id="rN">0</b></div></div><p class="hint" id="whint">Dam olish kunlarini rahbar belgilaydi.</p><div id="wedit"></div></section>'
@@ -364,7 +364,8 @@ function staffView(id,canEdit,opts){
         r.querySelector('.ttext').textContent=x.text;
         const chk=r.querySelector('.chk');
         if(canEdit)chk.disabled=true;
-        else chk.onclick=async()=>{if(isDone)lsDel(key);else lsSet(key,'1');renderTasks();
+        else if(!isDone)chk.onclick=()=>sendPhoto(x);
+        else chk.onclick=async()=>{if(ph){toast('Rasm rahbarga yuborilgan');return}lsDel(key);renderTasks();
           try{await staffRef(id).collection('answers').doc('task_'+x.id).set({a:isDone?'undone':'done',at:Date.now(),task:x.id})}catch(e){}};
         const tb=r.querySelector('.tbody');
         if(ph)tb.appendChild(photoBox(x.id,ph));
@@ -455,6 +456,7 @@ function adminList(user){
   app.innerHTML='<div class="wrap"><header><span class="shop">Majnuntol Market</span><h1>Rahbar paneli</h1><span class="meta">'+esc(user.email||'')+'</span></header>'
    +installCard()
    +'<section class="card"><h2>Xodimlar</h2><div id="slist"><p class="hint">Yuklanmoqda…</p></div></section>'
+   +'<section class="card" id="feedCard"><h2>Bajarilgan vazifalar</h2><div id="ntA"></div><div id="feed"><p class="hint">Yuklanmoqda…</p></div></section>'
    +chatMarkup()
    +'<section class="card"><h2>Ish tartibi</h2><p class="hint" style="color:var(--fg);line-height:1.5">Shoxjaxon va Hayrullo 06:30 – 19:00, Iqbolmirzo 09:30 – 22:00. Qo\'shimcha ish: kuniga 33 333 so\'m, oyiga ko\'pi bilan 1 000 000 so\'m.</p></section>'
    +'<button class="ghost" id="out" style="align-self:center">Chiqish</button></div><div class="toast" id="toast" hidden></div>';
@@ -485,11 +487,45 @@ function adminList(user){
   unsubList=db.collection('staff').onSnapshot(q=>{
     rows=[];q.forEach(d=>rows.push(Object.assign({id:d.id},d.data())));
     const order=(PAGE.seed||[]).map(s=>s.id);rows.sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));
-    renderList();
+    renderList();if(typeof renderFeed==='function')renderFeed();
   },e=>{const L=$('slist');if(L)L.innerHTML='<p class="err">Ruxsat yo\'q. Firestore qoidalarida rahbar emaili to\'g\'ri yozilganini tekshiring.</p>'});
+  let phs=[],phFirst=true,showAll=false;
+  function renderFeed(){
+    const F=$('feed');if(!F)return;F.innerHTML='';
+    const grOf=sid=>((rows.find(r=>r.id===sid)||{}).grades)||{},nm=sid=>(rows.find(r=>r.id===sid)||{}).name||'Xodim';
+    const wait=phs.filter(p=>!grOf(p.sid)[p.id]),done=phs.filter(p=>grOf(p.sid)[p.id]);
+    const list=showAll?wait.concat(done.slice(0,20)):wait;
+    if(!phs.length){F.innerHTML='<p class="hint">Hali bajarilgan vazifa yo\'q. Xodim vazifani bajarib rasmga olsa, shu yerda chiqadi.</p>';return}
+    const h=document.createElement('p');h.className='hint';h.style.color='var(--fg)';
+    h.innerHTML=wait.length?'<b style="color:var(--low)">Baholash kutilmoqda: '+wait.length+' ta</b>':'Hammasi baholangan ✓';F.appendChild(h);
+    list.forEach(p=>{
+      const g=grOf(p.sid)[p.id],box=document.createElement('div');box.className='pbox';
+      const l=document.createElement('span');l.className='plabel';l.textContent=nm(p.sid)+' · '+dmyS(p.date)+' · '+(p.text||'');box.appendChild(l);
+      const row=document.createElement('div');row.className='prow';
+      const im=document.createElement('img');im.className='thumb';im.alt='Vazifa rasmi';im.src=p.img;im.onclick=()=>zoom(p.img);row.appendChild(im);
+      const side=document.createElement('div');side.className='pside';
+      const t=document.createElement('small');t.textContent='Yuborildi: '+atStr(p.at);side.appendChild(t);
+      const gl=document.createElement('span');gl.className='glbl';gl.textContent=g?'Baho: '+g+'/10':'Baho qo\'ying (1–10):';side.appendChild(gl);
+      const gr=document.createElement('div');gr.className='grades';
+      for(let k=1;k<=10;k++){const b=document.createElement('button');b.textContent=k;if(g===k)b.className='on';b.setAttribute('aria-label',k+' ball');
+        b.onclick=async()=>{try{await staffRef(p.sid).set({grades:{[p.id]:k},updated:stamp()},{merge:true});toast(nm(p.sid)+': '+k+'/10 baho qo\'yildi')}catch(e){toast("Saqlab bo'lmadi, internetni tekshiring")}};gr.appendChild(b)}
+      side.appendChild(gr);row.appendChild(side);box.appendChild(row);F.appendChild(box)});
+    if(done.length){const b=document.createElement('button');b.className='ghost';b.style.alignSelf='flex-start';b.textContent=showAll?'Baholanganlarni yashirish':'Baholanganlarni ko\'rsatish ('+done.length+')';b.onclick=()=>{showAll=!showAll;renderFeed()};F.appendChild(b)}
+  }
+  const dmyS=s=>s?s.split('-').reverse().join('.'):'';
+  const NA=$('ntA');
+  if(NA&&canNotify()&&Notification.permission==='default'){
+    NA.innerHTML='<button class="ghost" id="ntABtn" style="margin-bottom:4px">🔔 Yangi rasm kelganda bildirishnoma olish</button>';
+    $('ntABtn').onclick=async()=>{try{const p=await Notification.requestPermission();NA.innerHTML='';if(p==='granted')toast('🔔 Bildirishnomalar yoqildi')}catch(e){}}}
   unsubPend=db.collectionGroup('photos').onSnapshot(q=>{
-    pend={};q.forEach(d=>{const sid=d.ref.parent.parent.id;(pend[sid]=pend[sid]||{})[d.id]=1});renderList();
-  },()=>{});
+    pend={};phs=[];
+    q.forEach(d=>{const sid=d.ref.parent.parent.id;(pend[sid]=pend[sid]||{})[d.id]=1;phs.push(Object.assign({id:d.id,sid},d.data()))});
+    phs.sort((a,b)=>(b.at||0)-(a.at||0));
+    if(!phFirst){const nw=q.docChanges().filter(c=>c.type!=='removed');
+      if(nw.length){const p=nw[0].doc.data(),n=(rows.find(r=>r.id===nw[0].doc.ref.parent.parent.id)||{}).name||'Xodim';
+        toast('📷 '+n+' vazifani bajardi');buzz();notify('📷 '+n+' vazifani bajardi',String(p.text||''),'photo')}}
+    phFirst=false;renderList();renderFeed();
+  },()=>{const F=$('feed');if(F)F.innerHTML='<p class="err">Yuklanmadi. Firestore qoidalarini yangilash kerak.</p>'});
 }
 function adminRoute(user){
   const id=location.hash.slice(1);
