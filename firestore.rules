@@ -48,14 +48,5 @@ service cloud.firestore {
         && (request.resource.data.uid != 'admin' || isOwner());
       allow update, delete: if isOwner();
     }
-
-    // Telegram bot: username hammaga ochiq, token faqat rahbarga
-    match /settings/public {
-      allow read: if true;
-      allow write: if isOwner();
-    }
-    match /settings/private {
-      allow read, write: if isOwner();
-    }
   }
 }
