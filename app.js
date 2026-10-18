@@ -37,7 +37,7 @@ const staffRef=id=>db.collection('staff').doc(id);
 /* ---------- PWA ---------- */
 let deferredPrompt=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;const b=$('instBtn');if(b)b.hidden=false;const s=$('instSteps');if(s)s.hidden=true});
-window.addEventListener('appinstalled',()=>{lsSet('mj_inst','1');const c=$('instCard');if(c)c.hidden=true;toast("Ilova o'rnatildi")});
+window.addEventListener('appinstalled',()=>{lsSet('mj_inst','1');toast("Ilova o'rnatildi. Belgini ilovalar ro'yxatidan toping")});
 if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register(PAGE.root+'sw.js').catch(()=>{})})}
 
 function installCard(){
@@ -54,7 +54,14 @@ function installCard(){
 function wireInstall(){
   const b=$('instBtn'),d=$('instDone');
   if(b){if(deferredPrompt){b.hidden=false;$('instSteps').hidden=true}
-    b.onclick=async()=>{if(!deferredPrompt)return;deferredPrompt.prompt();try{const r=await deferredPrompt.userChoice;if(r&&r.outcome==='accepted')lsSet('mj_inst','1')}catch(e){}deferredPrompt=null;b.hidden=true;$('instSteps').hidden=false}}
+    b.onclick=async()=>{
+      const steps=$('instSteps');
+      if(!deferredPrompt){b.hidden=true;steps.hidden=false;return}
+      let ok=false;
+      try{await deferredPrompt.prompt();const r=await deferredPrompt.userChoice;ok=!!(r&&r.outcome==='accepted')}catch(e){}
+      deferredPrompt=null;b.hidden=true;
+      if(ok){lsSet('mj_inst','1');steps.innerHTML='<li><b>O\'rnatildi!</b> Majnuntol belgisi bir necha soniyada paydo bo\'ladi.</li><li>Bosh ekranda ko\'rinmasa, ekranni pastdan yuqoriga suring: belgi ilovalar ro\'yxatida turadi. Uni bosib turib, bosh ekranga sudrab qo\'ying.</li>'}
+      steps.hidden=false}}
   if(d)d.onclick=()=>{lsSet('mj_inst','1');$('instCard').hidden=true};
 }
 
