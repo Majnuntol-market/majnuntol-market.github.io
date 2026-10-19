@@ -112,9 +112,38 @@ function shrink(file){
     im.src=u;
   });
 }
+/* Ilova ichidagi kamera: paneldan chiqmasdan rasmga olish */
+function inAppCamera(cb,fallback){
+  if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){fallback();return}
+  let stream=null,facing='environment',shot=null;
+  const o=document.createElement('div');o.className='cam';o.setAttribute('role','dialog');o.setAttribute('aria-label','Kamera');
+  o.innerHTML='<video playsinline muted autoplay></video><img class="cprev" alt="Olingan rasm" hidden>'
+   +'<div class="ctop"><button class="cx" aria-label="Yopish">✕</button><span class="cmsg">Kamera ochilmoqda…</span><button class="cflip" aria-label="Kamerani almashtirish">🔄</button></div>'
+   +'<div class="cbot"><button class="cshot" aria-label="Rasmga olish"></button><div class="cok" hidden><button class="ghost cre">↺ Qayta olish</button><button class="btn csend">✓ Yuborish</button></div></div>';
+  document.body.appendChild(o);document.body.style.overflow='hidden';
+  const v=o.querySelector('video'),pv=o.querySelector('.cprev'),msg=o.querySelector('.cmsg');
+  const stop=()=>{if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}};
+  const close=()=>{stop();o.remove();document.body.style.overflow='';if(pv.src)URL.revokeObjectURL(pv.src)};
+  async function start(){
+    stop();msg.textContent='Kamera ochilmoqda…';
+    try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing},width:{ideal:1920},height:{ideal:1080}},audio:false});
+      v.srcObject=stream;await v.play().catch(()=>{});msg.textContent=''}
+    catch(e){close();toast(e&&e.name==='NotAllowedError'?'Kameraga ruxsat berilmadi. Telefon sozlamalaridan ruxsat bering':'Kamera ochilmadi');fallback()}
+  }
+  o.querySelector('.cx').onclick=close;
+  o.querySelector('.cflip').onclick=()=>{facing=facing==='environment'?'user':'environment';start()};
+  o.querySelector('.cshot').onclick=()=>{
+    if(!v.videoWidth)return;const c=document.createElement('canvas');c.width=v.videoWidth;c.height=v.videoHeight;
+    c.getContext('2d').drawImage(v,0,0);buzz();
+    c.toBlob(b=>{if(!b)return;shot=b;pv.src=URL.createObjectURL(b);pv.hidden=false;v.hidden=true;
+      o.querySelector('.cshot').hidden=true;o.querySelector('.cok').hidden=false;o.querySelector('.cflip').hidden=true},'image/jpeg',0.92)};
+  o.querySelector('.cre').onclick=()=>{shot=null;pv.hidden=true;v.hidden=false;o.querySelector('.cshot').hidden=false;o.querySelector('.cok').hidden=true;o.querySelector('.cflip').hidden=false};
+  o.querySelector('.csend').onclick=()=>{const b=shot;close();if(b)cb(b)};
+  start();
+}
 function pickImage(cb,cam){
-  const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.hidden=true;
-  if(cam)inp.setAttribute('capture','environment'); // to'g'ridan-to'g'ri orqa kamerani ochadi
+  if(cam){inAppCamera(cb,()=>pickImage(cb,false));return}
+  const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.hidden=true;inp.setAttribute('capture','environment');
   document.body.appendChild(inp);
   inp.onchange=()=>{const f=inp.files&&inp.files[0];inp.remove();if(f)cb(f)};
   inp.click();
@@ -175,7 +204,7 @@ async function notify(title,body,tag){
 
 /* ---------- Yangilanish ---------- */
 // MUHIM: har safar ilova o'zgartirilganda APP_V va version.json dagi "v" bittaga oshiriladi.
-const APP_V=11;
+const APP_V=12;
 let updShown=false;
 async function checkUpdate(){
   try{const r=await fetch(PAGE.root+'version.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
@@ -377,7 +406,7 @@ function staffView(id,canEdit,opts){
         photos[task.id]=photos[task.id]||{img,at:Date.now(),date:task.date,text:task.text};
         renderTasks();toast('Rasm rahbarga yuborildi ✓')}
       catch(e){toast(e&&e.code==='permission-denied'?"Rasm yuborish hali yoqilmagan: Firestore qoidalarini yangilang":"Rasm yuborilmadi, qayta urinib ko'ring")}
-      upBusy=false});
+      upBusy=false},true);
   }
   let selfBusy=false;
   function sendSelf(S,stage,text){
