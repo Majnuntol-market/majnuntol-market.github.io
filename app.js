@@ -204,7 +204,7 @@ async function notify(title,body,tag){
 
 /* ---------- Yangilanish ---------- */
 // MUHIM: har safar ilova o'zgartirilganda APP_V va version.json dagi "v" bittaga oshiriladi.
-const APP_V=12;
+const APP_V=13;
 let updShown=false;
 async function checkUpdate(){
   try{const r=await fetch(PAGE.root+'version.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
@@ -255,6 +255,42 @@ function wireInstall(){
       if(ok){lsSet('mj_inst','1');steps.innerHTML='<li><b>O\'rnatildi!</b> Majnuntol belgisi bir necha soniyada paydo bo\'ladi.</li><li>Bosh ekranda ko\'rinmasa, ekranni pastdan yuqoriga suring: belgi ilovalar ro\'yxatida turadi. Uni bosib turib, bosh ekranga sudrab qo\'ying.</li>'}
       steps.hidden=false}}
   if(d)d.onclick=()=>{lsSet('mj_inst','1');$('instCard').hidden=true};
+}
+
+/* ---------- Favqulodda chaqiruv: sirena ---------- */
+let actx=null;
+const unlockAudio=()=>{try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();if(actx.state==='suspended')actx.resume()}catch(e){}};
+['pointerdown','touchstart','keydown'].forEach(ev=>document.addEventListener(ev,unlockAudio,{passive:true}));
+let siren=null;
+function sirenStart(){
+  unlockAudio();if(!actx||siren)return;
+  const g=actx.createGain();g.gain.value=0.0001;g.gain.exponentialRampToValueAtTime(0.9,actx.currentTime+0.15);
+  const comp=actx.createDynamicsCompressor();g.connect(comp);comp.connect(actx.destination);
+  const o1=actx.createOscillator(),o2=actx.createOscillator();o1.type='sawtooth';o2.type='square';
+  const lfo=actx.createOscillator(),lg=actx.createGain();lfo.type='triangle';lfo.frequency.value=0.9;lg.gain.value=420;
+  lfo.connect(lg);lg.connect(o1.frequency);lg.connect(o2.frequency);o1.frequency.value=980;o2.frequency.value=985;
+  const m=actx.createGain();m.gain.value=0.45;o1.connect(m);o2.connect(m);m.connect(g);
+  [o1,o2,lfo].forEach(o=>o.start());siren={stop(){try{g.gain.setTargetAtTime(0.0001,actx.currentTime,0.05);setTimeout(()=>[o1,o2,lfo].forEach(o=>o.stop()),300)}catch(e){}}};
+}
+function sirenStop(){if(siren){siren.stop();siren=null}}
+let alarmEl=null,alarmVib=null,alarmTitle=null;
+function showAlarm(name,onAck){
+  if(alarmEl)return;
+  alarmEl=document.createElement('div');alarmEl.className='alarm';alarmEl.setAttribute('role','alertdialog');
+  alarmEl.innerHTML='<div class="al-in"><div class="al-ico">🚨</div><h2>ZUDLIK BILAN<br>RAHBAR OLDIGA BORING!</h2><p></p><button class="al-btn">✅ Boryapman</button><button class="al-snd" hidden>🔊 Ovozni yoqish</button></div>';
+  alarmEl.querySelector('p').textContent=(name?name+', ':'')+'rahbar sizni chaqiryapti.';
+  document.body.appendChild(alarmEl);
+  sirenStart();
+  const sb=alarmEl.querySelector('.al-snd');
+  setTimeout(()=>{if(!siren||(actx&&actx.state!=='running')){sb.hidden=false}},600);
+  sb.onclick=()=>{unlockAudio();sirenStop();sirenStart();sb.hidden=true};
+  try{navigator.vibrate&&navigator.vibrate([600,250,600,250,600])}catch(e){}
+  alarmVib=setInterval(()=>{try{navigator.vibrate&&navigator.vibrate([600,250,600,250,600])}catch(e){}},2600);
+  const t0=document.title;let f=false;alarmTitle=setInterval(()=>{document.title=(f=!f)?'🚨 RAHBAR CHAQIRYAPTI':t0},700);
+  (async()=>{try{if(canNotify()&&Notification.permission==='granted'){const reg=await navigator.serviceWorker.ready;
+    await reg.showNotification('🚨 Rahbar chaqiryapti!',{body:'Zudlik bilan rahbar oldiga boring!',tag:'call',renotify:true,requireInteraction:true,vibrate:[600,250,600,250,600],icon:PAGE.root+'icon-192.png',data:{url:location.href}})}}catch(e){}})();
+  alarmEl.querySelector('.al-btn').onclick=()=>{sirenStop();clearInterval(alarmVib);clearInterval(alarmTitle);document.title=t0;
+    try{navigator.vibrate&&navigator.vibrate(0)}catch(e){}alarmEl.remove();alarmEl=null;onAck&&onAck()};
 }
 
 /* ---------- Xodim sahifasi ---------- */
@@ -646,6 +682,10 @@ function staffView(id,canEdit,opts){
       const sm=st.selfTasks||{};
       if(seenS&&loaded){Object.entries(sm).forEach(([k,v])=>{if(seenS[k]!==v.s){const m=v.s==='go'?'✅ Rahbar: «Boshlang!» — '+(v.text||''):'✋ Rahbar: hozir kerak emas — '+(v.text||'');toast(m);buzz();notify(v.s==='go'?'✅ Boshlang!':'✋ Kerak emas',v.text||'','self')}})}
       if(loaded){seenS={};Object.entries(sm).forEach(([k,v])=>seenS[k]=v.s)}
+      const cl=st.call;
+      if(loaded&&cl&&cl.at){const ack=+(lsGet('call_ack_'+id)||0);
+        if(cl.at>ack&&Date.now()-cl.at<15*60e3)showAlarm(st.name,async()=>{lsSet('call_ack_'+id,String(cl.at));
+          try{await staffRef(id).collection('answers').doc('call_ack').set({a:'ack',at:Date.now(),call:cl.at});toast('Rahbarga «Boryapman» deb javob yuborildi')}catch(e){}})}
       if(seen&&loaded){const nw=(st.tasks||[]).filter(x=>!seen.has(x.id)&&x.date>=ymdOff(0));if(nw.length){toast('📋 Yangi vazifa: '+nw[0].text.slice(0,60));buzz();notify('📋 Yangi vazifa',nw.map(x=>'• '+x.text).join('\n'),'task')}}
       if(loaded)seen=new Set(ids);prevRender()};
     const nc=$('ntCard');
@@ -694,7 +734,7 @@ function adminList(user){
     I.innerHTML='Yangi versiya tayyor (v'+APP_V+'). Tugmani bosing — har bir xodim ilovasida <b>"Yangilash"</b> so\'raladi, ular bosishi bilan ilova o\'zi yangilanadi.';
     B.hidden=false;
     B.onclick=async()=>{B.disabled=true;
-      try{await db.collection('settings').doc('update').set({v:APP_V,note:"Mustaqil vazifa: xodim o'zi taklif qiladi, rahbar Boshlang deydi va baholaydi",at:Date.now()});
+      try{await db.collection('settings').doc('update').set({v:APP_V,note:"Rahbar chaqiruvi: sirena va «Zudlik bilan rahbar oldiga boring»",at:Date.now()});
         B.hidden=true;I.innerHTML='Yuborildi ✓ Xodimlar ilovani ochganda <b>"Yangilash"</b> so\'raladi.';toast('📢 Yangilanish xodimlarga yuborildi')}
       catch(e){B.disabled=false;toast(e&&e.code==='permission-denied'?'Yuborib bo\'lmadi: Firestore qoidalarini yangilang':'Yuborib bo\'lmadi, internetni tekshiring')}};
   }).catch(()=>{const I=$('updInfo');if(I)I.textContent='Yangilanish holatini o\'qib bo\'lmadi. Firestore qoidalarini yangilang.'});
@@ -704,9 +744,13 @@ function adminList(user){
   let rows=[],pend={};
   /* davomat va fikrlar: har bir xodim uchun alohida tinglash */
   adminSubs.forEach(f=>{try{f()}catch(e){}});adminSubs=[];
-  const attToday={},fbs={};let fbFirst={};
+  const attToday={},fbs={},callAck={};let fbFirst={};
   function watchStaff(sid){
     if(attToday[sid]!==undefined)return;attToday[sid]=null;
+    adminSubs.push(staffRef(sid).collection('answers').doc('call_ack').onSnapshot(sn=>{
+      const prev=callAck[sid],v=sn.exists?sn.data():null;callAck[sid]=v;
+      if(prev!==undefined&&v&&(!prev||prev.at!==v.at)){const n=(rows.find(r=>r.id===sid)||{}).name||'Xodim';toast('✅ '+n+': «Boryapman»');buzz();notify('✅ '+n+' kelyapti','«Boryapman» deb javob berdi','call')}
+      renderList()},()=>{}));
     adminSubs.push(staffRef(sid).collection('answers').doc('att_'+ymdTk(0)).onSnapshot(sn=>{
       const prev=attToday[sid],v=sn.exists?sn.data():null;attToday[sid]=v;
       if(prev&&v&&v.out&&!prev.out){const n=(rows.find(r=>r.id===sid)||{}).name||'Xodim';toast('🏁 '+n+' ishdan ketdi: '+v.out);notify('🏁 '+n+' ishdan ketdi',v.out,'att')}
@@ -737,7 +781,7 @@ function adminList(user){
     rows.forEach(r=>{
       const PT=ptsOf(r),url=base()+r.id+'/';
       const el=document.createElement('div');el.className='srow';
-      el.innerHTML='<span class="mini"></span><span class="sn"><b></b><small></small></span><span class="sa"><button class="ghost op">Ochish</button><button class="ghost cp">Havola</button></span>';
+      el.innerHTML='<span class="mini"></span><span class="sn"><b></b><small></small></span><span class="sa"><button class="ghost op">Ochish</button><button class="ghost cp">Havola</button></span><button class="callb">🚨 Chaqirish</button><span class="calls" hidden></span>';
       el.querySelector('.mini').style.background=pcol(PT.tot);el.querySelector('.mini').textContent=sgn(PT.tot);
       el.querySelector('b').textContent=r.name+' · '+(r.os==='ios'?'iPhone':'Android');el.querySelector('small').textContent=url;
       const gr=r.grades||{},waiting=Object.keys(pend[r.id]||{}).filter(k=>!isSelf(k)&&!gOf(gr[k])).length;
@@ -747,6 +791,11 @@ function adminList(user){
       {const a=attToday[r.id],ab=document.createElement('span');ab.className='attb'+(a&&a.in?(a.out?' gone':' in'):'');
         ab.textContent=a&&a.in?('Keldi '+a.in+(a.out?' · Ketdi '+a.out:'')):'Bugun hali kelmadi';el.querySelector('.sn').appendChild(ab)}
       el.querySelector('.op').onclick=()=>{location.hash=r.id};
+      {const cb=el.querySelector('.callb'),cs=el.querySelector('.calls'),c=r.call,ak=callAck[r.id];
+        if(c&&c.at&&Date.now()-c.at<15*60e3){cs.hidden=false;const ok=ak&&ak.call===c.at;
+          cs.className='calls'+(ok?' ok':'');cs.textContent=ok?'✅ «Boryapman» · '+atStr(ak.at).slice(11):'🚨 Chaqirildi '+atStr(c.at).slice(11)+' · javob kutilmoqda'}
+        cb.onclick=async()=>{if(!confirm(r.name+'ni zudlik bilan chaqirasizmi?\nTelefonida sirena chalinadi.'))return;cb.disabled=true;
+          try{await staffRef(r.id).set({call:{at:Date.now()}},{merge:true});toast('🚨 '+r.name+' chaqirildi')}catch(e){toast("Yuborib bo'lmadi, internetni tekshiring")}cb.disabled=false}}
       const cp=el.querySelector('.cp');cp.onclick=()=>copy(url,cp,'Havola');
       L.appendChild(el);
     });
@@ -755,7 +804,7 @@ function adminList(user){
     rows=[];q.forEach(d=>rows.push(Object.assign({id:d.id},d.data())));rows.forEach(r=>watchStaff(r.id));
     const order=(PAGE.seed||[]).map(s=>s.id);rows.sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));
     renderList();if(typeof renderFeed==='function')renderFeed();
-    if(!tickTimer){let dd=ymdTk(0);tickTimer=setInterval(()=>{if(ymdTk(0)!==dd){dd=ymdTk(0);renderList()}},60000)}
+    if(!tickTimer){let dd=ymdTk(0);tickTimer=setInterval(()=>{if(ymdTk(0)!==dd){dd=ymdTk(0)}renderList()},30000)}
   },e=>{const L=$('slist');if(L)L.innerHTML='<p class="err">Ruxsat yo\'q. Firestore qoidalarida rahbar emaili to\'g\'ri yozilganini tekshiring.</p>'});
   let phs=[],phFirst=true;
   function renderFeed(){

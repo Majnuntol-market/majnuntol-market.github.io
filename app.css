@@ -285,3 +285,21 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
 .cam .cok{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;max-width:420px}
 .cam .cok .ghost{color:#fff;border-color:#fff8;background:#0006;padding:14px}
 .cam [hidden]{display:none!important}
+
+/* v13: rahbar chaqiruvi */
+.callb{grid-column:1/-1;width:100%;margin-top:8px;border:0;border-radius:12px;padding:12px;font:700 15px var(--display);background:#c62828;color:#fff;cursor:pointer;letter-spacing:.02em}
+.callb:disabled{opacity:.6}
+.calls{grid-column:1/-1;display:block;margin-top:6px;font-size:13px;color:var(--low);font-weight:600}
+.calls.ok{color:var(--good)}
+.alarm{position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;padding:24px;background:#b71c1c;animation:alFlash .7s steps(1) infinite;color:#fff;text-align:center}
+@keyframes alFlash{50%{background:#ff1744}}
+.alarm .al-in{display:flex;flex-direction:column;align-items:center;gap:16px;max-width:420px}
+.alarm .al-ico{font-size:96px;line-height:1;animation:alPulse .7s ease-in-out infinite}
+@keyframes alPulse{50%{transform:scale(1.18)}}
+.alarm h2{margin:0;font:800 32px/1.15 var(--display);letter-spacing:.02em;color:#fff;text-transform:none}
+.alarm p{margin:0;font-size:18px;opacity:.95}
+.alarm .al-btn{margin-top:12px;border:0;border-radius:16px;padding:20px 28px;font:800 22px var(--display);background:#fff;color:#b71c1c;cursor:pointer;width:100%}
+.alarm .al-snd{border:2px solid #fff;background:transparent;color:#fff;border-radius:14px;padding:12px 18px;font:600 16px var(--display);cursor:pointer}
+@media (prefers-reduced-motion:reduce){.alarm,.alarm .al-ico{animation:none}}
+.srow{flex-wrap:wrap}.srow .callb,.srow .calls{flex:1 0 100%}
+.srow .sn{flex:1;min-width:0}.srow .sa{display:flex;flex-direction:column;gap:6px;flex:none}
