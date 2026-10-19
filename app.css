@@ -261,3 +261,14 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
 .glog{display:flex;flex-direction:column}
 .glog .gl{display:grid;grid-template-columns:28px 1fr auto;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
 .glog .gl:last-child{border-bottom:0}.glog .ge{font-size:20px}.glog .gt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.glog .gp{font:600 15px var(--mono)}
+
+/* v10: Mustaqil vazifa */
+.selfc textarea{width:100%;min-height:64px;resize:vertical}
+#selfList{display:flex;flex-direction:column;gap:10px}
+.selfi{display:flex;flex-direction:column;gap:8px;background:var(--bg);border:1px solid var(--line);border-radius:14px;padding:12px}
+.selfi b{font-size:15px;overflow-wrap:anywhere}
+.sphotos{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sth{display:flex;flex-direction:column;gap:3px;min-width:0}
+.sth img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:10px;cursor:zoom-in;background:var(--track)}
+.sth small{color:var(--muted);font:11px var(--mono)}
+.selfb{display:flex;flex-direction:column;gap:10px}

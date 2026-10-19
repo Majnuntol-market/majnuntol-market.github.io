@@ -38,7 +38,36 @@ const pcol=n=>n>0?'var(--good)':n<0?'var(--low)':'var(--muted)';
 // baho qo'yish: bahoni saqlaydi, so'ng rasmni ikkala tomonda ham o'chiradi
 async function gradeTask(sid,tid,g,meta){
   await db.collection('staff').doc(sid).set({grades:{[tid]:{g,at:Date.now(),text:(meta&&meta.text)||'',date:(meta&&meta.date)||''}},updated:stamp()},{merge:true});
-  try{await db.collection('staff').doc(sid).collection('photos').doc(tid).delete()}catch(e){}
+  const pc=db.collection('staff').doc(sid).collection('photos');
+  for(const k of [tid,tid+'_a',tid+'_b']){try{await pc.doc(k).delete()}catch(e){}}
+}
+/* ---------- Mustaqil vazifa: xodim taklif qiladi -> rahbar "Boshlang" -> xodim natijani yuboradi -> rahbar baholaydi ---------- */
+const isSelf=k=>/^self_/.test(k);
+function selfGroups(list,grades){const G={};
+  list.forEach(p=>{const m=/^(self_[a-z0-9]+)_(a|b)$/.exec(p.id);if(m){(G[m[1]]=G[m[1]]||{id:m[1]})[m[2]]=p}});
+  return Object.values(G).filter(g=>!gOf((grades||{})[g.id])).sort((x,y)=>((y.a||y.b).at||0)-((x.a||x.b).at||0))}
+function selfThumb(ph,label){const w=document.createElement('div');w.className='sth';
+  const im=document.createElement('img');im.alt=label;im.src=ph.img;im.onclick=()=>zoom(ph.img);
+  const l=document.createElement('small');l.textContent=label+' · '+atStr(ph.at).slice(11);w.append(im,l);return w}
+function selfPhotos(g){const r=document.createElement('div');r.className='sphotos';
+  if(g.a)r.appendChild(selfThumb(g.a,'Oldin'));if(g.b)r.appendChild(selfThumb(g.b,'Keyin'));return r}
+function selfBossBox(sid,g,stt,name){
+  const ph=g.a||g.b,text=ph.text||'',box=document.createElement('div');box.className='pbox selfb';
+  const l=document.createElement('span');l.className='plabel';l.textContent='🙋 '+name+' · '+text;box.appendChild(l);
+  box.appendChild(selfPhotos(g));
+  const ref=db.collection('staff').doc(sid);
+  if(g.b){const h=document.createElement('small');h.className='glbl';h.textContent='Ish tugadi. Baho qo\'ying (rasmlar keyin o\'chadi):';box.appendChild(h);
+    box.appendChild(gradeButtons(null,async k=>{try{await gradeTask(sid,g.id,k,{text,date:ph.date});toast(name+': '+GE[k]+' '+sgn(GV[k])+' ochko')}catch(e){toast("Saqlab bo'lmadi, internetni tekshiring")}}))}
+  else if(!stt){const h=document.createElement('small');h.className='glbl';h.textContent='Xodim shu ishni qilmoqchi. Ruxsat berasizmi?';box.appendChild(h);
+    const two=document.createElement('div');two.className='two';
+    const go=document.createElement('button');go.className='btn yes';go.textContent='▶️ Boshlang';
+    const no=document.createElement('button');no.className='btn no';no.textContent='✋ Kerak emas';
+    go.onclick=async()=>{go.disabled=no.disabled=true;try{await ref.set({selfTasks:{[g.id]:{s:'go',at:Date.now(),text}},updated:stamp()},{merge:true});toast(name+'ga «Boshlang» yuborildi')}catch(e){go.disabled=no.disabled=false;toast("Saqlab bo'lmadi")}};
+    no.onclick=async()=>{go.disabled=no.disabled=true;try{await ref.set({selfTasks:{[g.id]:{s:'no',at:Date.now(),text}},updated:stamp()},{merge:true});
+      for(const k of [g.id+'_a',g.id+'_b']){try{await ref.collection('photos').doc(k).delete()}catch(e){}}toast(name+'ga «Kerak emas» yuborildi')}catch(e){go.disabled=no.disabled=false;toast("Saqlab bo'lmadi")}};
+    two.append(go,no);box.appendChild(two)}
+  else{const h=document.createElement('span');h.className='gchip g-mid';h.textContent='▶️ Ruxsat berildi · xodim bajarmoqda…';box.appendChild(h)}
+  return box;
 }
 function gradeButtons(cur,onPick){
   const gr=document.createElement('div');gr.className='emo';
@@ -145,7 +174,7 @@ async function notify(title,body,tag){
 
 /* ---------- Yangilanish ---------- */
 // MUHIM: har safar ilova o'zgartirilganda APP_V va version.json dagi "v" bittaga oshiriladi.
-const APP_V=9;
+const APP_V=10;
 let updShown=false;
 async function checkUpdate(){
   try{const r=await fetch(PAGE.root+'version.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
@@ -208,6 +237,8 @@ function staffMarkup(withInstall,topbar){
   +'<section class="card" id="clockCard"><div class="clock"><h2 id="hours">Ish vaqti</h2><span class="now" id="now">--:--</span></div><span class="state" id="state">…</span><div><div class="count" id="count">--:--:--</div><span class="countlbl" id="countlbl"></span></div><div class="bar"><i id="bar" style="width:0%"></i></div><div class="ticks"><span id="tk1"></span><span id="tk2"></span><span id="tk3"></span></div>'
   +'<div class="offer" id="offer" hidden><p><b>Ish vaqti tugadi. Qo\'shimcha ishga marhamat!</b><br>Qolib ishlashni xohlaysizmi? Javobingiz rahbarga yuboriladi.</p><div class="two" id="offerBtns"><button class="btn yes" id="yes">Ha, xohlayman</button><button class="btn no" id="no">Yo\'q, xohlamayman</button></div><div class="sent" id="sent" hidden></div></div></section>'
   +'<section class="card" id="taskCard"><h2>'+(withInstall?'Vazifalarim':'Vazifalar')+'</h2><div id="pend"></div><div class="gavg" id="gavg" hidden></div><div class="tabs2"><button id="dToday" class="on">Bugun</button><button id="dTom">Ertaga</button></div><div class="prog" id="prog" hidden><span id="progTxt"></span><div class="bar"><i id="progBar" style="width:0%"></i></div></div><div class="tasks" id="tasks"></div><p class="hint" id="thint">Vazifani bajargach, doirachani yoki <b>📷 Rasmga olib yuborish</b> tugmasini bosing — rasm to\'g\'ridan-to\'g\'ri rahbar paneliga tushadi va u baho qo\'yadi.</p><div id="tedit"></div></section>'
+  +(withInstall?'<section class="card selfc" id="selfCard"><h2>🙋 Mustaqil vazifa</h2><p class="hint">O\'zingiz biror ish qilmoqchi bo\'lsangiz: qisqacha yozing va hozirgi holatni rasmga oling. Rahbar <b>«Boshlang»</b> desa, ishni bajaring va natijani yana rasmga oling. Rahbar 👍 🤏 👎 bilan baholaydi.</p><div id="selfList"></div><textarea id="selfTx" maxlength="300" placeholder="Masalan: Ichimliklar javonini tartiblab chiqaman" aria-label="Qanday ish qilmoqchisiz"></textarea><button class="btn" id="selfStart">📷 Rasmga olib, ruxsat so\'rash</button></section>'
+   :'<section class="card selfc" id="selfCard" hidden><h2>🙋 Mustaqil vazifalar</h2><div id="selfList"></div></section>')
   +(withInstall?chatMarkup():'')
   +(withInstall?'<section class="card fb" id="fbCard"><h2>💬 Fikr va takliflar</h2><p class="hint">Fikr, taklif yoki shikoyatingizni yozing. Uni faqat rahbar ko\'radi, boshqa xodimlar ko\'rmaydi.</p><textarea id="fbTx" maxlength="1000" placeholder="Masalan: Mevalar rastasini kirish tomonga ko\'chirsak, xaridorlar ko\'proq ko\'radi…" aria-label="Fikr yoki taklif"></textarea><button class="btn" id="fbSend">Rahbarga yuborish</button><div class="fbmine" id="fbMine"></div></section>':'')
   +'<section class="card pts"><h2>'+(withInstall?'Mening ochkolarim':'Ochkolar')+'</h2><div class="ptop"><b class="pbig" id="pct">0</b><div class="who"><span class="pill" id="lvl">Bugun: 0</span><span class="meta" id="last"></span><span class="meta" id="zinfo">👍 +5 ochko · 🤏 o\'zgarmaydi · 👎 −5 ochko. Ochko cheklanmagan.</span></div></div><div class="gcount" id="gcnt"></div><p class="note" id="note" hidden></p><div id="histWrap" hidden><h2 style="margin-bottom:6px">Oxirgi baholar</h2><div class="glog" id="hist"></div></div><div id="editor"></div></section>'
@@ -295,7 +326,7 @@ function staffView(id,canEdit,opts){
         $('cn').onclick=()=>{editing=false;render()};
         $('sv').onclick=ev=>commit({note:t.value.trim(),updated:stamp()},ev.target,'Izoh saqlandi',()=>{editing=false})}
     }
-    renderWork();renderTasks();hours();renderMonth();
+    renderWork();renderTasks();renderSelf();hours();renderMonth();
     $('foot').textContent=st.updated?'Yangilangan: '+st.updated:(loaded?'':'Yuklanmoqda…');
   }
   function renderWork(){
@@ -347,6 +378,40 @@ function staffView(id,canEdit,opts){
       catch(e){toast(e&&e.code==='permission-denied'?"Rasm yuborish hali yoqilmagan: Firestore qoidalarini yangilang":"Rasm yuborilmadi, qayta urinib ko'ring")}
       upBusy=false});
   }
+  let selfBusy=false;
+  function sendSelf(S,stage,text){
+    if(selfBusy)return;
+    pickImage(async f=>{selfBusy=true;toast('Rasm yuborilmoqda…');
+      try{const img=await shrink(f);
+        await staffRef(id).collection('photos').doc(S+'_'+stage).set({img,at:Date.now(),task:S,text:text.slice(0,300),date:ymdOff(0)});
+        if(stage==='a'&&$('selfTx'))$('selfTx').value='';
+        toast(stage==='a'?'Rahbarga yuborildi. «Boshlang» deyishini kuting':'Natija rahbarga yuborildi ✓');buzz()}
+      catch(e){toast("Rasm yuborilmadi, qayta urinib ko'ring")}
+      selfBusy=false});
+  }
+  function renderSelf(){
+    const C=$('selfCard'),L=$('selfList');if(!C||!L)return;L.innerHTML='';
+    const arr=Object.entries(photos).map(([k,v])=>Object.assign({id:k},v)),gr=st.grades||{},SM=st.selfTasks||{},today=ymdTk(0);
+    const groups=selfGroups(arr,gr);
+    if(canEdit){C.hidden=!groups.length;groups.forEach(g=>L.appendChild(selfBossBox(id,g,SM[g.id],st.name)));return}
+    groups.forEach(g=>{const ph=g.a||g.b,stt=SM[g.id],it=document.createElement('div');it.className='selfi';
+      const t=document.createElement('b');t.textContent=ph.text||'Mustaqil vazifa';it.appendChild(t);it.appendChild(selfPhotos(g));
+      const s=document.createElement('span');
+      if(g.b){s.className='gchip g-mid';s.textContent='⏳ Natija yuborildi · rahbar baholashi kutilmoqda'}
+      else if(stt&&stt.s==='go'){s.className='gchip g-up';s.textContent='✅ Rahbar: «Boshlang!»'}
+      else{s.className='gchip g-mid';s.textContent='⏳ Rahbar ruxsatini kutmoqda'}
+      it.appendChild(s);
+      if(!g.b&&stt&&stt.s==='go'){const b=document.createElement('button');b.className='btn';b.textContent='📷 Tugatdim — natijani rasmga olish';b.onclick=()=>sendSelf(g.id,'b',ph.text||'');it.appendChild(b)}
+      L.appendChild(it)});
+    // bugun yakunlanganlar
+    Object.entries(SM).filter(([k,v])=>v.s==='no'&&ymdTk2(v.at)===today&&!arr.some(p=>p.id.startsWith(k))).forEach(([k,v])=>{
+      const it=document.createElement('div');it.className='selfi';const t=document.createElement('b');t.textContent=v.text||'Mustaqil vazifa';
+      const s=document.createElement('span');s.className='gchip g-down';s.textContent='✋ Rahbar: hozir kerak emas';it.append(t,s);L.appendChild(it)});
+    Object.entries(gr).filter(([k,v])=>isSelf(k)&&gOf(v)&&ymdTk2(v.at)===today).forEach(([k,v])=>{
+      const it=document.createElement('div');it.className='selfi';const t=document.createElement('b');t.textContent=v.text||'Mustaqil vazifa';it.append(t,gradeChip(v));L.appendChild(it)});
+  }
+  if($('selfStart'))$('selfStart').onclick=()=>{const v=($('selfTx').value||'').trim();if(!v){toast('Avval qanday ish qilmoqchi ekaningizni yozing');$('selfTx').focus();return}
+    sendSelf('self_'+Date.now().toString(36),'a',v)};
   async function setGrade(tid,g,meta){
     try{await gradeTask(id,tid,g,meta);toast(GE[g]+' '+GT[g]+' · '+sgn(GV[g])+' ochko')}
     catch(e){toast(e&&e.code==='permission-denied'?"Sizda o'zgartirish huquqi yo'q":"Saqlab bo'lmadi, internetni tekshiring");render()}
@@ -375,7 +440,7 @@ function staffView(id,canEdit,opts){
     A.innerHTML='Jami ochko: <b style="color:'+pcol(Q.tot)+'">'+sgn(Q.tot)+'</b> <small>👍 '+Q.c.up+' · 🤏 '+Q.c.mid+' · 👎 '+Q.c.down+'</small>';
     if(!canEdit)return;
     const shown=ymdOff(tDay);
-    const list=Object.entries(photos).filter(([k,p])=>!gOf(gr[k])&&p.date!==shown).sort((a,b)=>b[1].at-a[1].at);
+    const list=Object.entries(photos).filter(([k,p])=>!isSelf(k)&&!gOf(gr[k])&&p.date!==shown).sort((a,b)=>b[1].at-a[1].at);
     if(!list.length)return;
     const w=document.createElement('div');w.className='pend';
     const h=document.createElement('b');h.textContent='Baholash kutilmoqda: '+list.length+' ta rasm';w.appendChild(h);
@@ -538,16 +603,19 @@ function staffView(id,canEdit,opts){
   unsubPhotos=staffRef(id).collection('photos').onSnapshot(q=>{
     photos={};q.forEach(d=>photos[d.id]=d.data());
     if(canEdit&&!phFirst&&q.docChanges().some(c=>c.type!=='removed')){toast('📷 '+st.name+' yangi rasm yubordi');buzz()}
-    phFirst=false;if($('tasks')&&!tEdit)renderTasks();
+    phFirst=false;if($('tasks')&&!tEdit)renderTasks();renderSelf();
   },()=>{});
   if(!canEdit){
     // yangi vazifa kelganda ilova ochiq bo'lsa ham xabar beradi
     let seen=null;const prevRender=render;
-    let seenG=null;
+    let seenG=null,seenS=null;
     render=function(){const ids=(st.tasks||[]).map(x=>x.id);
       const gk=Object.entries(st.grades||{}).filter(([k,v])=>gOf(v));
       if(seenG&&loaded){const nw=gk.filter(([k,v])=>seenG[k]!==v.g);if(nw.length){const v=nw[nw.length-1][1];const m=GE[v.g]+' Rahbar bahosi: '+GT[v.g]+' ('+sgn(GV[v.g])+' ochko)';toast(m);buzz();notify(m,v.text||'','grade')}}
       if(loaded){seenG={};gk.forEach(([k,v])=>seenG[k]=v.g)}
+      const sm=st.selfTasks||{};
+      if(seenS&&loaded){Object.entries(sm).forEach(([k,v])=>{if(seenS[k]!==v.s){const m=v.s==='go'?'✅ Rahbar: «Boshlang!» — '+(v.text||''):'✋ Rahbar: hozir kerak emas — '+(v.text||'');toast(m);buzz();notify(v.s==='go'?'✅ Boshlang!':'✋ Kerak emas',v.text||'','self')}})}
+      if(loaded){seenS={};Object.entries(sm).forEach(([k,v])=>seenS[k]=v.s)}
       if(seen&&loaded){const nw=(st.tasks||[]).filter(x=>!seen.has(x.id)&&x.date>=ymdOff(0));if(nw.length){toast('📋 Yangi vazifa: '+nw[0].text.slice(0,60));buzz();notify('📋 Yangi vazifa',nw.map(x=>'• '+x.text).join('\n'),'task')}}
       if(loaded)seen=new Set(ids);prevRender()};
     const nc=$('ntCard');
@@ -596,7 +664,7 @@ function adminList(user){
     I.innerHTML='Yangi versiya tayyor (v'+APP_V+'). Tugmani bosing — har bir xodim ilovasida <b>"Yangilash"</b> so\'raladi, ular bosishi bilan ilova o\'zi yangilanadi.';
     B.hidden=false;
     B.onclick=async()=>{B.disabled=true;
-      try{await db.collection('settings').doc('update').set({v:APP_V,note:"Baholash endi 👍 🤏 👎 belgilari bilan, shijoat o'rniga ochko",at:Date.now()});
+      try{await db.collection('settings').doc('update').set({v:APP_V,note:"Mustaqil vazifa: xodim o'zi taklif qiladi, rahbar Boshlang deydi va baholaydi",at:Date.now()});
         B.hidden=true;I.innerHTML='Yuborildi ✓ Xodimlar ilovani ochganda <b>"Yangilash"</b> so\'raladi.';toast('📢 Yangilanish xodimlarga yuborildi')}
       catch(e){B.disabled=false;toast(e&&e.code==='permission-denied'?'Yuborib bo\'lmadi: Firestore qoidalarini yangilang':'Yuborib bo\'lmadi, internetni tekshiring')}};
   }).catch(()=>{const I=$('updInfo');if(I)I.textContent='Yangilanish holatini o\'qib bo\'lmadi. Firestore qoidalarini yangilang.'});
@@ -642,7 +710,9 @@ function adminList(user){
       el.innerHTML='<span class="mini"></span><span class="sn"><b></b><small></small></span><span class="sa"><button class="ghost op">Ochish</button><button class="ghost cp">Havola</button></span>';
       el.querySelector('.mini').style.background=pcol(PT.tot);el.querySelector('.mini').textContent=sgn(PT.tot);
       el.querySelector('b').textContent=r.name+' · '+(r.os==='ios'?'iPhone':'Android');el.querySelector('small').textContent=url;
-      const gr=r.grades||{},waiting=Object.keys(pend[r.id]||{}).filter(k=>!gOf(gr[k])).length;
+      const gr=r.grades||{},waiting=Object.keys(pend[r.id]||{}).filter(k=>!isSelf(k)&&!gOf(gr[k])).length;
+      const sg=selfGroups(Object.keys(pend[r.id]||{}).map(k=>({id:k})),gr).filter(g=>g.b||!(r.selfTasks||{})[g.id]).length;
+      if(sg){const bd=document.createElement('span');bd.className='badge';bd.textContent='🙋 '+sg+' ta mustaqil vazifa javob kutmoqda';setTimeout(()=>el.querySelector('.sn').appendChild(bd))}
       if(waiting){const bd=document.createElement('span');bd.className='badge';bd.textContent='📷 '+waiting+' ta rasm baholanmagan';el.querySelector('.sn').appendChild(bd)}
       {const a=attToday[r.id],ab=document.createElement('span');ab.className='attb'+(a&&a.in?(a.out?' gone':' in'):'');
         ab.textContent=a&&a.in?('Keldi '+a.in+(a.out?' · Ketdi '+a.out:'')):'Bugun hali kelmadi';el.querySelector('.sn').appendChild(ab)}
@@ -661,7 +731,11 @@ function adminList(user){
   function renderFeed(){
     const F=$('feed');if(!F)return;F.innerHTML='';
     const grOf=sid=>((rows.find(r=>r.id===sid)||{}).grades)||{},nm=sid=>(rows.find(r=>r.id===sid)||{}).name||'Xodim';
-    const wait=phs.filter(p=>!gOf(grOf(p.sid)[p.id])),list=wait;
+    const wait=phs.filter(p=>!isSelf(p.id)&&!gOf(grOf(p.sid)[p.id])),list=wait;
+    const SG=[];rows.forEach(r=>selfGroups(phs.filter(p=>p.sid===r.id),r.grades).forEach(g=>SG.push([r,g])));
+    if(SG.length){const hh=document.createElement('p');hh.className='hint';hh.style.color='var(--fg)';hh.innerHTML='<b>🙋 Mustaqil vazifalar: '+SG.length+' ta</b>';F.appendChild(hh);
+      SG.forEach(([r,g])=>F.appendChild(selfBossBox(r.id,g,(r.selfTasks||{})[g.id],r.name||'Xodim')))}
+    if(!wait.length&&SG.length)return;
     if(!phs.length){F.innerHTML='<p class="hint">Hali bajarilgan vazifa yo\'q. Xodim vazifani bajarib rasmga olsa, shu yerda chiqadi.</p>';return}
     const h=document.createElement('p');h.className='hint';h.style.color='var(--fg)';
     h.innerHTML=wait.length?'<b style="color:var(--low)">Baholash kutilmoqda: '+wait.length+' ta</b> <small class="meta">Baho qo\'yilgach rasm o\'chadi.</small>':'Hammasi baholangan ✓';F.appendChild(h);
@@ -686,8 +760,9 @@ function adminList(user){
     q.forEach(d=>{const sid=d.ref.parent.parent.id;(pend[sid]=pend[sid]||{})[d.id]=1;phs.push(Object.assign({id:d.id,sid},d.data()))});
     phs.sort((a,b)=>(b.at||0)-(a.at||0));
     if(!phFirst){const nw=q.docChanges().filter(c=>c.type!=='removed');
-      if(nw.length){const p=nw[0].doc.data(),n=(rows.find(r=>r.id===nw[0].doc.ref.parent.parent.id)||{}).name||'Xodim';
-        toast('📷 '+n+' vazifani bajardi');buzz();notify('📷 '+n+' vazifani bajardi',String(p.text||''),'photo')}}
+      if(nw.length){const p=nw[0].doc.data(),did=nw[0].doc.id,n=(rows.find(r=>r.id===nw[0].doc.ref.parent.parent.id)||{}).name||'Xodim';
+        const m=/_a$/.test(did)&&isSelf(did)?'🙋 '+n+' mustaqil vazifa so\'ramoqda':/_b$/.test(did)&&isSelf(did)?'📷 '+n+' mustaqil vazifani tugatdi':'📷 '+n+' vazifani bajardi';
+        toast(m);buzz();notify(m,String(p.text||''),'photo')}}
     phFirst=false;renderList();renderFeed();
   },()=>{const F=$('feed');if(F)F.innerHTML='<p class="err">Yuklanmadi. Firestore qoidalarini yangilash kerak.</p>'});
 }
