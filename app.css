@@ -241,3 +241,23 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
 .fbi.adm{background:var(--bg);border:1px solid var(--line)}
 .fbi .fbf{display:flex;justify-content:space-between;align-items:center;gap:8px}
 #fbList{display:flex;flex-direction:column;gap:8px}
+
+/* v9: 👍 🤏 👎 baholash va ochko */
+.emo{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;width:100%}
+.emo button{border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:12px;padding:8px 4px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;font:500 12px var(--display)}
+.emo button span{font-size:26px;line-height:1.1}
+.emo button small{color:var(--muted);font-size:11px;white-space:nowrap}
+.emo .e-up.on{background:var(--soft);border-color:var(--good)}
+.emo .e-mid.on{background:var(--track);border-color:var(--mid)}
+.emo .e-down.on{background:var(--low-soft);border-color:var(--low)}
+.emo button:disabled{opacity:.5}
+.gchip{align-self:flex-start;font:600 14px var(--display);padding:6px 12px;border-radius:20px}
+.gchip.g-up{background:var(--soft);color:var(--good)}.gchip.g-mid{background:var(--track);color:var(--mid)}.gchip.g-down{background:var(--low-soft);color:var(--low)}
+.regrade{display:flex;flex-direction:column;gap:6px}
+.pts .ptop{display:flex;align-items:center;gap:16px}
+.pts .pbig{flex:none;min-width:110px;text-align:center;font:700 54px var(--mono);font-variant-numeric:tabular-nums;line-height:1}
+.pts .pill{color:#fff}
+.gcount{display:flex;gap:8px}.gcount span{flex:1;text-align:center;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:6px;font:600 15px var(--mono)}
+.glog{display:flex;flex-direction:column}
+.glog .gl{display:grid;grid-template-columns:28px 1fr auto;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
+.glog .gl:last-child{border-bottom:0}.glog .ge{font-size:20px}.glog .gt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.glog .gp{font:600 15px var(--mono)}
