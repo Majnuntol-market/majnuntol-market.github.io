@@ -122,7 +122,7 @@ async function notify(title,body,tag){
 
 /* ---------- Yangilanish ---------- */
 // MUHIM: har safar ilova o'zgartirilganda APP_V va version.json dagi "v" bittaga oshiriladi.
-const APP_V=7;
+const APP_V=8;
 let updShown=false;
 async function checkUpdate(){
   try{const r=await fetch(PAGE.root+'version.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
@@ -179,12 +179,14 @@ function wireInstall(){
 function staffMarkup(withInstall,topbar){
   return '<div class="wrap">'+(topbar||'')
   +'<header><span class="shop">Majnuntol Market</span><h1 id="hello">Salom!</h1><span class="role" id="role" hidden>Rahbar rejimi</span></header>'
+  +'<section class="card att" id="attCard"><div class="clock"><h2>Davomat</h2><span class="now" id="attDate"></span></div><div class="arow"><div><small>Keldim</small><b id="attIn">—</b></div><div><small>Ketdim</small><b id="attOut">—</b></div></div><div class="anote" id="attNote" role="status" hidden></div>'+(withInstall?'<button class="btn big" id="attBtn">✅ Ishga keldim</button>':'')+'<div class="alog" id="attLog" hidden></div></section>'
   +(withInstall?installCard():'')
   +(withInstall?'<section class="card tgc" id="ntCard" hidden><div class="ih"><span class="bell">🔔</span><span class="it"><b>Bildirishnomalarni yoqing</b><small>Rahbar vazifa berganda yoki chatga yozganda telefoningizda xabar chiqadi.</small></span></div><button class="btn" id="ntBtn">Bildirishnomalarni yoqish</button><p class="hint" id="ntHint">Telefon ruxsat so\'raganda <b>"Ruxsat berish"</b> ni bosing.</p></section>':'')
   +'<section class="card" id="clockCard"><div class="clock"><h2 id="hours">Ish vaqti</h2><span class="now" id="now">--:--</span></div><span class="state" id="state">…</span><div><div class="count" id="count">--:--:--</div><span class="countlbl" id="countlbl"></span></div><div class="bar"><i id="bar" style="width:0%"></i></div><div class="ticks"><span id="tk1"></span><span id="tk2"></span><span id="tk3"></span></div>'
   +'<div class="offer" id="offer" hidden><p><b>Ish vaqti tugadi. Qo\'shimcha ishga marhamat!</b><br>Qolib ishlashni xohlaysizmi? Javobingiz rahbarga yuboriladi.</p><div class="two" id="offerBtns"><button class="btn yes" id="yes">Ha, xohlayman</button><button class="btn no" id="no">Yo\'q, xohlamayman</button></div><div class="sent" id="sent" hidden></div></div></section>'
   +'<section class="card" id="taskCard"><h2>'+(withInstall?'Vazifalarim':'Vazifalar')+'</h2><div id="pend"></div><div class="gavg" id="gavg" hidden></div><div class="tabs2"><button id="dToday" class="on">Bugun</button><button id="dTom">Ertaga</button></div><div class="prog" id="prog" hidden><span id="progTxt"></span><div class="bar"><i id="progBar" style="width:0%"></i></div></div><div class="tasks" id="tasks"></div><p class="hint" id="thint">Vazifani bajargach, doirachani yoki <b>📷 Rasmga olib yuborish</b> tugmasini bosing — rasm to\'g\'ridan-to\'g\'ri rahbar paneliga tushadi va u baho qo\'yadi.</p><div id="tedit"></div></section>'
   +(withInstall?chatMarkup():'')
+  +(withInstall?'<section class="card fb" id="fbCard"><h2>💬 Fikr va takliflar</h2><p class="hint">Fikr, taklif yoki shikoyatingizni yozing. Uni faqat rahbar ko\'radi, boshqa xodimlar ko\'rmaydi.</p><textarea id="fbTx" maxlength="1000" placeholder="Masalan: Mevalar rastasini kirish tomonga ko\'chirsak, xaridorlar ko\'proq ko\'radi…" aria-label="Fikr yoki taklif"></textarea><button class="btn" id="fbSend">Rahbarga yuborish</button><div class="fbmine" id="fbMine"></div></section>':'')
   +'<section class="card"><h2>'+(withInstall?'Bugungi ish shijoatim':'Bugungi shijoat')+'</h2><div class="top"><div class="gauge"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40" fill="none" stroke="var(--track)" stroke-width="10"></circle><circle id="arc" cx="50" cy="50" r="40" fill="none" stroke="var(--muted)" stroke-width="10" stroke-linecap="round" stroke-dasharray="251.33" stroke-dashoffset="251.33"></circle></svg><span class="v" id="pct">—</span></div><div class="who"><span class="pill" id="lvl" style="background:var(--muted)">Baholanmagan</span><span class="trend" id="trend" hidden></span><span class="meta" id="last">Hali baho qo\'yilmagan</span><span class="meta" id="zinfo"></span></div></div><p class="note" id="note" hidden></p><div id="histWrap" hidden><h2 style="margin-bottom:6px">Oxirgi kunlar shijoati</h2><div class="hist" id="hist"></div></div><div id="editor"></div></section>'
   +'<section class="card"><h2>Ish va dam olish kunlari</h2><div class="wnav"><button id="wprev" aria-label="Oldingi oy">‹</button><b id="wname">Bu oy</b><button id="wnext" aria-label="Keyingi oy">›</button></div><span class="legend"><span><i class="wk"></i>Ishlagan</span><span><i class="rt"></i>Dam olgan</span></span><div class="wcal" id="wcal"></div><div class="wsum"><div class="ws"><small>Ishlagan kunlar</small><b id="wN">0</b></div><div class="rs"><small>Dam olgan kunlar</small><b id="rN">0</b></div></div><p class="hint" id="whint">Dam olish kunlarini rahbar belgilaydi.</p><div id="wedit"></div></section>'
   +'<section class="card"><h2>Qo\'shimcha ish daromadi</h2><div class="money"><div><small>1 kun qo\'shimcha ish</small><b>33 333 so\'m</b></div><div><small>Oyiga ko\'pi bilan (30 kun)</small><b>1 000 000 so\'m</b></div></div><div class="mhead"><span id="mname">Bu oy</span><span class="legend"><span><i class="y"></i>Ha</span><span><i class="n"></i>Yo\'q</span></span></div><div class="cal" id="cal"></div><div class="msum"><div><small>"Ha" degan kunlar</small><b class="gy" id="yesN">0 kun</b></div><div><small>"Yo\'q" degan kunlar</small><b class="gn" id="noN">0 kun</b></div></div><div class="earn"><small>Bu oy qo\'shimcha ishdan daromad</small><b id="earn">0 so\'m</b><span class="meta" id="earnCalc">Har bir "Ha" degan kun uchun 33 333 so\'m qo\'shiladi.</span></div></section>'
@@ -280,6 +282,7 @@ function staffView(id,canEdit,opts){
     const days=new Date(Date.UTC(y,m+1,0)).getUTCDate(),first=(new Date(Date.UTC(y,m,1)).getUTCDay()+6)%7;
     const cmp=(y-ty)*12+(m-tm),limit=cmp<0?days:cmp>0?0:td;
     $('wname').textContent=MONTHS[m]+' '+y;
+    {const h=$('wcal').closest('.card').querySelector('h2');if(h)h.textContent='Ish va dam olish kunlari · '+MONTHS[m];}
     const set=new Set(restEdit?restDraft:(st.rest||[]));
     const C=$('wcal');C.innerHTML='';C.classList.toggle('editing',restEdit);
     ['Du','Se','Ch','Pa','Ju','Sh','Ya'].forEach(w=>{const h=document.createElement('div');h.className='pad';h.textContent=w;C.appendChild(h)});
@@ -428,6 +431,70 @@ function staffView(id,canEdit,opts){
     catch(e){busy=false;btn.disabled=false;btn.textContent=lbl;toast(e&&e.code==='permission-denied'?"Sizda o'zgartirish huquqi yo'q":"Saqlab bo'lmadi, internetni tekshiring")}
   }
 
+  /* ---- Davomat: Ishga keldim / Ishdan ketdim ---- */
+  const AK='att_'+id;
+  const attLoad=()=>{try{return JSON.parse(lsGet(AK)||'{}')||{}}catch(e){return {}}};
+  const nowHM=()=>{const d=tk();return pad(d.getUTCHours())+':'+pad(d.getUTCMinutes())};
+  const minOf=t=>{const [h,m]=String(t).split(':');return (+h)*60+(+m)};
+  function attNote(kind,t,late){
+    const n=$('attNote');if(!n)return;n.className='anote '+kind;n.innerHTML='<b></b><span></span>';
+    n.querySelector('b').textContent=kind==='in'?'Ishga keldingiz ✓':'Ishdan ketdingiz ✓';
+    n.querySelector('span').textContent=(kind==='in'?'Kelgan vaqtingiz ':'Ketgan vaqtingiz ')+t+' rahbarga yuborildi.'+(late?' '+late:'');
+    n.hidden=false;clearTimeout(n._t);n._t=setTimeout(()=>{n.hidden=true},8000);
+  }
+  function renderAtt(){
+    if(!$('attCard'))return;
+    const day=ymdTk(0);$('attDate').textContent=dstr(tk());
+    const rec=canEdit?((st.att||{})[day]||{}):(attLoad()[day]||{});
+    const i=rec.in||rec.i,o=rec.out||rec.o;
+    $('attIn').textContent=i||'—';$('attOut').textContent=o||'—';
+    const S=START()/60;$('attIn').className=i&&minOf(i)>S+5?'late':'';
+    const B=$('attBtn');
+    if(B){B.hidden=!!o;B.textContent=i?'🏁 Ishdan ketdim':'✅ Ishga keldim';B.classList.toggle('out',!!i)}
+    const L=$('attLog');
+    if(canEdit&&L){
+      const A=st.att||{},rows=[];
+      for(let k=-1;k>=-7;k--){const d=ymdTk(k),r=A[d];if(r)rows.push('<div><span>'+esc(d.split('-').reverse().join('.'))+'</span><span>'+esc(r.in||'—')+' → '+esc(r.out||'—')+'</span></div>')}
+      L.hidden=!rows.length;L.innerHTML=rows.length?'<small>Oxirgi kunlar</small>'+rows.join(''):'';
+      if(!i)$('attIn').textContent='Hali kelmadi';
+    }
+  }
+  async function attPress(){
+    const all=attLoad(),day=ymdTk(0),rec=all[day]||{},t=nowHM();
+    if(!rec.i){rec.i=t;all[day]=rec;lsSet(AK,JSON.stringify(all));
+      const lateMin=minOf(t)-START()/60;attNote('in',t,lateMin>5?'Kechikish: '+lateMin+' daqiqa.':'')}
+    else if(!rec.o){if(!confirm('Ishdan ketayotganingizni tasdiqlaysizmi? ('+t+')'))return;
+      rec.o=t;all[day]=rec;lsSet(AK,JSON.stringify(all));attNote('out',t,'')}
+    else return;
+    renderAtt();buzz();
+    try{await staffRef(id).collection('answers').doc('att_'+day).set({a:'att',in:rec.i,out:rec.o||null,at:Date.now()})}
+    catch(e){toast('Vaqt saqlandi, lekin rahbarga yetmadi. Internetni tekshiring')}
+  }
+  if($('attBtn'))$('attBtn').onclick=attPress;
+  setInterval(()=>{if($('attCard'))renderAtt()},30000);
+
+  /* ---- Fikr va takliflar (faqat rahbar ko'radi) ---- */
+  const FK='fb_'+id;
+  const fbLoad=()=>{try{return JSON.parse(lsGet(FK)||'[]')||[]}catch(e){return []}};
+  function renderFb(){
+    const M=$('fbMine');if(!M)return;const L=fbLoad();M.innerHTML='';
+    if(!L.length)return;
+    const h=document.createElement('small');h.className='meta';h.textContent='Siz yuborganlar';M.appendChild(h);
+    L.slice(-5).reverse().forEach(x=>{const b=document.createElement('div');b.className='fbi';
+      b.innerHTML='<span></span><small></small>';b.querySelector('span').textContent=x.text;b.querySelector('small').textContent=atStr(x.at)+' · rahbarga yuborildi ✓';M.appendChild(b)});
+  }
+  if($('fbSend')){
+    $('fbSend').onclick=async()=>{
+      const tx=$('fbTx'),v=tx.value.trim();if(!v){tx.focus();return}
+      const bt=$('fbSend');bt.disabled=true;bt.textContent='Yuborilmoqda…';const at=Date.now();
+      try{await staffRef(id).collection('answers').doc('fb_'+at).set({a:'fb',text:v.slice(0,1000),name:st.name||PAGE.name||'Xodim',at});
+        const L=fbLoad();L.push({text:v.slice(0,1000),at});lsSet(FK,JSON.stringify(L.slice(-20)));
+        tx.value='';renderFb();toast('Fikringiz rahbarga yuborildi ✓');buzz()}
+      catch(e){toast('Yuborilmadi, internetni tekshiring')}
+      bt.disabled=false;bt.textContent='Rahbarga yuborish'};
+    renderFb();
+  }
+
   if(unsubStaff)unsubStaff();
   unsubStaff=staffRef(id).onSnapshot(snap=>{
     loaded=true;
@@ -438,8 +505,9 @@ function staffView(id,canEdit,opts){
     // xodim javoblarini rahbarga ko'rsatish
     staffRef(id).collection('answers').onSnapshot(q=>{
       const ans={},done={};
-      q.forEach(d=>{const v=d.data();if(d.id.startsWith('task_')){if(v.a==='done')done[v.task]=1}else{const [y,m,dd]=d.id.split('-');ans[dd+'.'+m+'.'+y]=v.a}});
-      st.answers=ans;st.done=done;if($('cal')){renderMonth();renderTasks()}
+      const att={};
+      q.forEach(d=>{const v=d.data();if(d.id.startsWith('task_')){if(v.a==='done')done[v.task]=1}else if(d.id.startsWith('att_')){att[d.id.slice(4)]=v}else if(d.id.startsWith('fb_')){}else{const [y,m,dd]=d.id.split('-');ans[dd+'.'+m+'.'+y]=v.a}});
+      st.answers=ans;st.done=done;st.att=att;if($('cal')){renderMonth();renderTasks();renderAtt()}
     },()=>{});
   }
   // vazifa rasmlari (xodim ham, rahbar ham ko'radi)
@@ -463,7 +531,7 @@ function staffView(id,canEdit,opts){
         else{$('ntHint').textContent='Ruxsat berilmadi. Telefon sozlamalaridan yoqishingiz mumkin.'}}catch(e){}}}
     wireChat({uid:id,name:st.name||PAGE.name||'Xodim'});
   }else stopChat();
-  render();renderAnswer();tick();
+  render();renderAnswer();renderAtt();tick();
   clearInterval(tickTimer);tickTimer=setInterval(tick,1000);
 }
 
@@ -481,7 +549,7 @@ function adminLogin(msg){
 }
 function base(){return location.href.replace(/#.*$/,'').replace(/rahbar\/(index\.html)?$/,'')}
 function copy(text,btn,label){const done=()=>{btn.textContent='Nusxalandi';setTimeout(()=>btn.textContent=label,1500)};try{navigator.clipboard.writeText(text).then(done,()=>prompt('Nusxalang:',text))}catch(e){prompt('Nusxalang:',text)}}
-let unsubList=null,unsubPend=null;
+let unsubList=null,unsubPend=null,adminSubs=[];
 function adminList(user){
   if(unsubStaff){unsubStaff();unsubStaff=null}if(unsubPhotos){unsubPhotos();unsubPhotos=null}clearInterval(tickTimer);tickTimer=null;
   const app=$('app');
@@ -489,6 +557,7 @@ function adminList(user){
    +installCard()
    +'<section class="card"><h2>Xodimlar</h2><div id="slist"><p class="hint">Yuklanmoqda…</p></div></section>'
    +'<section class="card" id="feedCard"><h2>Bajarilgan vazifalar</h2><div id="ntA"></div><div id="feed"><p class="hint">Yuklanmoqda…</p></div></section>'
+   +'<section class="card" id="fbAdmin"><h2>💬 Fikr va takliflar</h2><div id="fbList"><p class="hint">Yuklanmoqda…</p></div></section>'
    +chatMarkup()
    +'<section class="card"><h2>Ilova yangilanishi</h2><p class="hint" id="updInfo" style="color:var(--fg);line-height:1.5">Yuklanmoqda…</p><button class="btn" id="updSend" hidden>📢 Xodimlarga yangilanishni yuborish</button></section>'
    +'<section class="card"><h2>Ish tartibi</h2><p class="hint" style="color:var(--fg);line-height:1.5">Shoxjaxon va Hayrullo 06:30 – 19:00, Iqbolmirzo 09:30 – 22:00. Qo\'shimcha ish: kuniga 33 333 so\'m, oyiga ko\'pi bilan 1 000 000 so\'m.</p></section>'
@@ -501,7 +570,7 @@ function adminList(user){
     I.innerHTML='Yangi versiya tayyor (v'+APP_V+'). Tugmani bosing — har bir xodim ilovasida <b>"Yangilash"</b> so\'raladi, ular bosishi bilan ilova o\'zi yangilanadi.';
     B.hidden=false;
     B.onclick=async()=>{B.disabled=true;
-      try{await db.collection('settings').doc('update').set({v:APP_V,note:"Yangi imkoniyatlar qo'shildi. Yangilash tugmasini bosing",at:Date.now()});
+      try{await db.collection('settings').doc('update').set({v:APP_V,note:"Keldim / Ketdim tugmasi va Fikr va takliflar oynasi qo'shildi",at:Date.now()});
         B.hidden=true;I.innerHTML='Yuborildi ✓ Xodimlar ilovani ochganda <b>"Yangilash"</b> so\'raladi.';toast('📢 Yangilanish xodimlarga yuborildi')}
       catch(e){B.disabled=false;toast(e&&e.code==='permission-denied'?'Yuborib bo\'lmadi: Firestore qoidalarini yangilang':'Yuborib bo\'lmadi, internetni tekshiring')}};
   }).catch(()=>{const I=$('updInfo');if(I)I.textContent='Yangilanish holatini o\'qib bo\'lmadi. Firestore qoidalarini yangilang.'});
@@ -509,6 +578,33 @@ function adminList(user){
   if(unsubList)unsubList();
   if(unsubPend){unsubPend();unsubPend=null}
   let rows=[],pend={};
+  /* davomat va fikrlar: har bir xodim uchun alohida tinglash */
+  adminSubs.forEach(f=>{try{f()}catch(e){}});adminSubs=[];
+  const attToday={},fbs={};let fbFirst={};
+  function watchStaff(sid){
+    if(attToday[sid]!==undefined)return;attToday[sid]=null;
+    adminSubs.push(staffRef(sid).collection('answers').doc('att_'+ymdTk(0)).onSnapshot(sn=>{
+      const prev=attToday[sid],v=sn.exists?sn.data():null;attToday[sid]=v;
+      if(prev&&v&&v.out&&!prev.out){const n=(rows.find(r=>r.id===sid)||{}).name||'Xodim';toast('🏁 '+n+' ishdan ketdi: '+v.out);notify('🏁 '+n+' ishdan ketdi',v.out,'att')}
+      else if(prev===null&&v&&fbFirst['a'+sid]){const n=(rows.find(r=>r.id===sid)||{}).name||'Xodim';toast('✅ '+n+' ishga keldi: '+v.in);notify('✅ '+n+' ishga keldi',v.in,'att')}
+      fbFirst['a'+sid]=1;renderList()},()=>{}));
+    adminSubs.push(staffRef(sid).collection('answers').where('a','==','fb').onSnapshot(q=>{
+      const L=[];q.forEach(d=>L.push(Object.assign({id:d.id,sid},d.data())));fbs[sid]=L;
+      if(fbFirst[sid]){const nw=q.docChanges().filter(c=>c.type==='added');if(nw.length){const m=nw[nw.length-1].doc.data();toast('💬 '+(m.name||'Xodim')+': '+String(m.text||'').slice(0,60));buzz();notify('💬 Yangi taklif: '+(m.name||'Xodim'),String(m.text||'').slice(0,140),'fb')}}
+      fbFirst[sid]=1;renderFbAdmin()},()=>{const F=$('fbList');if(F)F.innerHTML='<p class="err">Fikrlarni yuklab bo\'lmadi.</p>'}));
+  }
+  function renderFbAdmin(){
+    const F=$('fbList');if(!F)return;
+    const all=[].concat(...Object.values(fbs)).sort((a,b)=>(b.at||0)-(a.at||0));
+    if(!all.length){F.innerHTML='<p class="hint">Hali fikr yoki taklif yo\'q. Xodimlar o\'z sahifasidan yozganda shu yerda chiqadi.</p>';return}
+    F.innerHTML='';
+    all.slice(0,40).forEach(x=>{const b=document.createElement('div');b.className='fbi adm';
+      b.innerHTML='<b></b><span></span><div class="fbf"><small></small><button class="ghost sm">O\'chirish</button></div>';
+      b.querySelector('b').textContent=x.name||((rows.find(r=>r.id===x.sid)||{}).name)||'Xodim';
+      b.querySelector('span').textContent=x.text||'';b.querySelector('small').textContent=atStr(x.at);
+      b.querySelector('button').onclick=async()=>{if(!confirm('Bu fikrni o\'chirasizmi?'))return;try{await staffRef(x.sid).collection('answers').doc(x.id).delete();toast('O\'chirildi')}catch(e){toast("O'chirib bo'lmadi")}};
+      F.appendChild(b)});
+  }
   function renderList(){
     const L=$('slist');if(!L)return;
     if(!rows.length){L.innerHTML='<p class="hint">Xodimlar hali yaratilmagan.</p><button class="btn" id="seed">Xodimlarni yaratish</button>';
@@ -522,13 +618,15 @@ function adminList(user){
       el.querySelector('b').textContent=r.name+' · '+(r.os==='ios'?'iPhone':'Android');el.querySelector('small').textContent=url;
       const gr=r.grades||{},waiting=Object.keys(pend[r.id]||{}).filter(k=>!gr[k]).length;
       if(waiting){const bd=document.createElement('span');bd.className='badge';bd.textContent='📷 '+waiting+' ta rasm baholanmagan';el.querySelector('.sn').appendChild(bd)}
+      {const a=attToday[r.id],ab=document.createElement('span');ab.className='attb'+(a&&a.in?(a.out?' gone':' in'):'');
+        ab.textContent=a&&a.in?('Keldi '+a.in+(a.out?' · Ketdi '+a.out:'')):'Bugun hali kelmadi';el.querySelector('.sn').appendChild(ab)}
       el.querySelector('.op').onclick=()=>{location.hash=r.id};
       const cp=el.querySelector('.cp');cp.onclick=()=>copy(url,cp,'Havola');
       L.appendChild(el);
     });
   }
   unsubList=db.collection('staff').onSnapshot(q=>{
-    rows=[];q.forEach(d=>rows.push(Object.assign({id:d.id},d.data())));
+    rows=[];q.forEach(d=>rows.push(Object.assign({id:d.id},d.data())));rows.forEach(r=>watchStaff(r.id));
     const order=(PAGE.seed||[]).map(s=>s.id);rows.sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));
     renderList();if(typeof renderFeed==='function')renderFeed();
     if(!tickTimer){let dd=ymdTk(0);tickTimer=setInterval(()=>{if(ymdTk(0)!==dd){dd=ymdTk(0);renderList()}},60000)}
@@ -573,7 +671,7 @@ function adminList(user){
 }
 function adminRoute(user){
   const id=location.hash.slice(1);
-  if(id){if(unsubList){unsubList();unsubList=null}if(unsubPend){unsubPend();unsubPend=null}
+  if(id){if(unsubList){unsubList();unsubList=null}if(unsubPend){unsubPend();unsubPend=null}adminSubs.forEach(f=>{try{f()}catch(e){}});adminSubs=[];
     staffView(id,true,{topbar:'<div class="topbar"><button class="back" id="backBtn">‹ Xodimlar</button></div>',onBack:()=>{history.pushState('',document.title,location.pathname);adminList(user)}})}
   else adminList(user);
 }

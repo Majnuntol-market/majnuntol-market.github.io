@@ -211,3 +211,33 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,a:focus-visible{
 .upd{position:fixed;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top,0px));z-index:40;width:calc(100% - 32px);max-width:528px;background:var(--fg);color:var(--bg);border-radius:14px;padding:12px 12px 12px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
 .upd .ut{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.upd .ut small{opacity:.8;font-size:13px;line-height:1.35}
 .upd .btn{flex:none;padding:10px 14px}
+
+/* v8: kalendar kataklari yashirildi (rahbar dam olish kunlarini belgilayotganda ko'rinadi) */
+.wcal:not(.editing),.cal,.mhead,.card:has(.wcal:not(.editing)) .legend,.card:has(.wcal:not(.editing)) .wnav{display:none!important}
+/* v8: Davomat */
+.att .arow{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.att .arow div{background:var(--soft);border-radius:12px;padding:10px 12px;min-width:0}
+.att .arow small{display:block;color:var(--muted);font-size:12px;margin-bottom:2px}
+.att .arow b{font-family:var(--mono);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums}
+.att .arow b.late{color:var(--low)}
+.att .big{width:100%;padding:16px;font-size:17px;border-radius:14px}
+.att .big.out{background:var(--night);color:var(--night-fg)}
+.att .anote{display:flex;flex-direction:column;gap:2px;border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.4}
+.att .anote b{font-size:16px}
+.att .anote.in{background:var(--soft);color:var(--good);border:1px solid var(--good)}
+.att .anote.out{background:var(--night);color:var(--night-fg)}
+.att .alog{display:flex;flex-direction:column;border-top:1px dashed var(--line);padding-top:8px}
+.att .alog small{color:var(--muted);font-size:12px;margin-bottom:4px}
+.att .alog div{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font:13px var(--mono)}
+.att .alog div:last-child{border-bottom:0}
+.attb{align-self:flex-start;font-size:12px;padding:2px 8px;border-radius:20px;background:var(--track);color:var(--muted);margin-top:2px}
+.attb.in{background:var(--soft);color:var(--good)}.attb.gone{background:var(--night);color:var(--night-fg)}
+/* v8: Fikr va takliflar */
+.fb textarea{width:100%;min-height:84px;resize:vertical}
+.fbmine{display:flex;flex-direction:column;gap:6px}
+.fbi{display:flex;flex-direction:column;gap:3px;background:var(--soft);border-radius:12px;padding:10px 12px;font-size:14px;line-height:1.45}
+.fbi span{overflow-wrap:anywhere;white-space:pre-wrap}
+.fbi small{color:var(--muted);font-size:11px;font-family:var(--mono)}
+.fbi.adm{background:var(--bg);border:1px solid var(--line)}
+.fbi .fbf{display:flex;justify-content:space-between;align-items:center;gap:8px}
+#fbList{display:flex;flex-direction:column;gap:8px}
