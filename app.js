@@ -112,8 +112,9 @@ function shrink(file){
     im.src=u;
   });
 }
-function pickImage(cb){
+function pickImage(cb,cam){
   const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.hidden=true;
+  if(cam)inp.setAttribute('capture','environment'); // to'g'ridan-to'g'ri orqa kamerani ochadi
   document.body.appendChild(inp);
   inp.onchange=()=>{const f=inp.files&&inp.files[0];inp.remove();if(f)cb(f)};
   inp.click();
@@ -174,7 +175,7 @@ async function notify(title,body,tag){
 
 /* ---------- Yangilanish ---------- */
 // MUHIM: har safar ilova o'zgartirilganda APP_V va version.json dagi "v" bittaga oshiriladi.
-const APP_V=10;
+const APP_V=11;
 let updShown=false;
 async function checkUpdate(){
   try{const r=await fetch(PAGE.root+'version.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
@@ -387,7 +388,7 @@ function staffView(id,canEdit,opts){
         if(stage==='a'&&$('selfTx'))$('selfTx').value='';
         toast(stage==='a'?'Rahbarga yuborildi. «Boshlang» deyishini kuting':'Natija rahbarga yuborildi ✓');buzz()}
       catch(e){toast("Rasm yuborilmadi, qayta urinib ko'ring")}
-      selfBusy=false});
+      selfBusy=false},true);
   }
   function renderSelf(){
     const C=$('selfCard'),L=$('selfList');if(!C||!L)return;L.innerHTML='';
