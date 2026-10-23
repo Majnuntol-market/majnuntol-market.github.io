@@ -87,17 +87,18 @@ const balText=(bal,cls)=>{const parts=['UZS','USD'].filter(c=>bal[c]).map(c=>'<s
 const sumText=(o)=>{const parts=['UZS','USD'].filter(c=>o[c]).map(c=>money(o[c],c));return parts.length?parts.join(' · '):"0 so'm"};
 
 /* ---------- Oylik hisoblari ---------- */
+function mapFor(s,k){s=s||{};let best=null;Object.keys(s).forEach(m=>{if(m<=k&&(best===null||m>best))best=m});return best===null?0:(s[best]||0)}
 function salaryFor(x,k){const s=x.sal||{};let best=null;Object.keys(s).forEach(m=>{if(m<=k&&(best===null||m>best))best=m});return best===null?0:(s[best]||0)}
 function divisor(k){const d=S.set.div;return d==='30'?30:d==='26'?26:daysIn(k)}
 function payroll(x,k){
   const rows=S.oy.filter(r=>r.xid===x.id&&r.month===k).sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.created||0)-(b.created||0));
-  const sal=salaryFor(x,k),div=divisor(k),daily=sal/div;
+  const sal=salaryFor(x,k),div=divisor(k),fixed=mapFor(x.cut,k),daily=fixed||sal/div;
   let absent=0,adv=0,bonus=0,fine=0,paid=0;
   rows.forEach(r=>{if(r.type==='kelmadi')absent+=Number(r.days)||1;else if(r.type==='avans')adv+=r.amount||0;else if(r.type==='bonus')bonus+=r.amount||0;else if(r.type==='jarima')fine+=r.amount||0;else if(r.type==='tolov')paid+=r.amount||0});
   const cut=Math.round(daily*absent);
   const earned=sal-cut+bonus-fine;
   const left=earned-adv-paid;
-  return {rows,sal,div,daily,absent,cut,adv,bonus,fine,paid,earned,left};
+  return {rows,sal,div,daily,fixed,absent,cut,adv,bonus,fine,paid,earned,left};
 }
 const OT={avans:'Avans (pul oldi)',kelmadi:'Kelmadi',bonus:'Bonus / qo\'shimcha',jarima:'Jarima / ushlab qolish',tolov:'Oylik berildi'};
 const daysText=d=>d===0.5?'yarim kun':(d%1?String(d).replace('.',','):d)+' kun';
@@ -263,27 +264,32 @@ function xodimForm(x){
   x=x||{};
   sheet('<h3>'+(x.id?'Xodimni tahrirlash':'Yangi xodim')+'</h3>'
     +field('Ism','<input id="xName" placeholder="Masalan, Shoxjaxon" value="'+esc(x.name||'')+'">')
-    +(x.id?'':field('Oylik (so\'m)','<input id="xSal" class="amount" inputmode="numeric" placeholder="5 000 000">')+field('Qaysi oydan','<input id="xFrom" type="month" value="'+xMonth+'">'))
+    +(x.id?'':field('Oylik (so\'m)','<input id="xSal" class="amount" inputmode="numeric" placeholder="5 000 000">')+field('Kelmagan kun uchun ayriladi (so\'m)','<input id="xCut" class="amount" inputmode="numeric" placeholder="Bo\'sh — avtomatik">')+field('Qaysi oydan','<input id="xFrom" type="month" value="'+xMonth+'">'))
     +field('Telefon','<input id="xTel" type="tel" placeholder="Ixtiyoriy" value="'+esc(x.tel||'')+'">')
     +'<div class="actions"><button class="btn ghost" data-close>Bekor</button><button class="btn" id="xSave">Saqlash</button></div>',
   ()=>{if(!x.id)setTimeout(()=>$('xName').focus(),50);
     $('xSave').onclick=()=>{const name=normName($('xName').value);if(!name){toast('Ismni yozing');return}
       if(x.id){save(store.update('xod',x.id,{name,tel:$('xTel').value.trim()}),'Saqlandi');xodimSheet(x.id);return}
       const sal=parseAmount($('xSal').value);if(!sal){toast('Oylikni yozing');return}
-      save(store.add('xod',{name,tel:$('xTel').value.trim(),sal:{[$('xFrom').value||xMonth]:sal},arch:false,created:Date.now()}),name+' qo\'shildi');closeSheet()}});
+      save(store.add('xod',{name,tel:$('xTel').value.trim(),sal:{[$('xFrom').value||xMonth]:sal},cut:{[$('xFrom').value||xMonth]:parseAmount($('xCut').value)},arch:false,created:Date.now()}),name+' qo\'shildi');closeSheet()}});
 }
 function salaryForm(x){
+  const fx=mapFor(x.cut,xMonth);
   sheet('<h3>'+esc(x.name)+' oyligi</h3>'
-    +field('Yangi oylik (so\'m)','<input id="sAmt" class="amount" inputmode="numeric" value="'+group(salaryFor(x,xMonth))+'">')
+    +field('Oylik (so\'m)','<input id="sAmt" class="amount" inputmode="numeric" value="'+group(salaryFor(x,xMonth))+'">')
+    +field('Kelmagan har bir kun uchun ayriladi (so\'m)','<input id="sCut" class="amount" inputmode="numeric" placeholder="Avtomatik: oylik ÷ kunlar" value="'+(fx?group(fx):'')+'">')
+    +'<p class="muted" style="margin:-4px 0 0">Bo\'sh qoldirsangiz, oylikdan avtomatik hisoblanadi. Yarim kunga buning yarmi ayriladi.</p>'
     +field('Qaysi oydan boshlab','<input id="sFrom" type="month" value="'+xMonth+'">')
     +'<p class="muted" style="margin:0">Oldingi oylar hisobi o\'zgarmaydi.</p>'
     +'<div class="actions"><button class="btn ghost" data-close>Bekor</button><button class="btn" id="sSave">Saqlash</button></div>',
   ()=>{$('sSave').onclick=()=>{const v=parseAmount($('sAmt').value),from=$('sFrom').value||xMonth;if(!v){toast('Summani yozing');return}
     const sal=Object.assign({},x.sal||{});sal[from]=v;
-    // shu oydan keyingi eski belgilashlar ham yangi oylikka teng bo'ladi
+    // shu oydan keyingi eski belgilashlar ham yangi qiymatga teng bo'ladi
     Object.keys(sal).forEach(k=>{if(k>from)delete sal[k]});
-    const p=DEMO?store.update('xod',x.id,{sal}):db.collection(COL.xod).doc(x.id).update({sal});
-    save(p,'Oylik '+money(v,'UZS')+' — '+monthName(from)+'dan');xodimSheet(x.id)}});
+    const cut=Object.assign({},x.cut||{});cut[from]=parseAmount($('sCut').value);
+    Object.keys(cut).forEach(k=>{if(k>from)delete cut[k]});
+    const p=DEMO?store.update('xod',x.id,{sal,cut}):db.collection(COL.xod).doc(x.id).update({sal,cut});
+    save(p,'Saqlandi — '+monthName(from)+'dan');xodimSheet(x.id)}});
 }
 function entryForm(x,type,e){
   e=e||{};
@@ -328,7 +334,7 @@ function xodimSheet(id){
         const sign=r.type==='bonus'?'plus':r.type==='kelmadi'?'warn':'minus';
         const val=r.type==='kelmadi'?daysText(Number(r.days)||1):(r.type==='bonus'?'+':'−')+group(r.amount);
         return '<button class="item" data-r="'+r.id+'"><div style="min-width:0"><div class="t">'+OT[r.type]+(r.note?' · <span class="muted">'+esc(r.note)+'</span>':'')+'</div><div class="s">'+fmtDate(r.date)+'</div></div><span class="num '+sign+'">'+val+'</span></button>'}).join(''):'<div class="empty">Bu oyda yozuv yo\'q</div>')+'</div></section>';
-    h+='<p class="muted" style="margin:0">Kunlik stavka: oylik ÷ '+p.div+' kun'+(S.set.div==='days'?' (oydagi kunlar soni)':'')+'. Sozlamalarda o\'zgartirish mumkin.</p>';
+    h+='<p class="muted" style="margin:0">'+(p.fixed?'Kelmagan har bir kun uchun '+money(p.fixed,'UZS')+' ayriladi (siz belgilagan).':'Kelmagan kun: oylik ÷ '+p.div+' kun = '+money(p.daily,'UZS')+'.')+' O\'zgartirish uchun oylik summasini bosing.</p>';
     h+='<div class="grid2"><button class="btn ghost" id="xEdit">Ism / telefon</button>'+(x.arch?'<button class="btn" id="xRestore">Qaytarish</button>':'<button class="btn danger" id="xArch">Olib tashlash</button>')+'</div>';
     if(x.arch)h+='<button class="btn danger" id="xDelete">Butunlay o\'chirish</button>';
     const r=$('sheet');r.innerHTML=h;
