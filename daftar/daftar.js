@@ -59,14 +59,30 @@ function demoEmit(col){S[col]=demo[col].map(x=>Object.assign({},x));S.ready[col]
 function listen(){
   unsubs.forEach(u=>u());unsubs=[];
   Object.keys(COL).forEach(k=>{
-    unsubs.push(db.collection(COL[k]).onSnapshot(q=>{S[k]=q.docs.map(d=>Object.assign({id:d.id},d.data()));S.ready[k]=true;render();if(k==='esl')scheduleNotifs()},
+    unsubs.push(db.collection(COL[k]).onSnapshot(q=>{S[k]=q.docs.map(d=>Object.assign({id:d.id},d.data()));S.ready[k]=true;render();if(k==='esl')scheduleNotifs();runSetup()},
       e=>{console.error(e);showRulesError()}));
   });
-  unsubs.push(db.collection('d_sozlama').doc('main').onSnapshot(d=>{S.set=Object.assign({div:'days'},d.exists?d.data():{});render()},()=>{}));
+  unsubs.push(db.collection('d_sozlama').doc('main').onSnapshot(d=>{S.set=Object.assign({div:'days'},d.exists?d.data():{});S.setReady=true;render();runSetup()},()=>{}));
 }
 let rulesErrShown=false;
 function showRulesError(){if(rulesErrShown)return;rulesErrShown=true;
   sheet('<h3>Bazaga ruxsat yo\'q</h3><p class="muted" style="line-height:1.5">Firebase Console → Firestore Database → Rules bo\'limiga saytdagi <b>firestore.rules</b> faylini nusxalab qo\'ying va «Publish» bosing. Keyin sahifani yangilang.</p><button class="btn" data-close>Tushunarli</button>')}
+/* Bir martalik sozlash (egasi so'radi, 23.10.2026): Shoxjaxon oyligi — 1 000 000 so'm + 400 $,
+   avanslar so'mdan, har kelmagan kun uchun 16 $ (yarim kun 8 $). Oktabr 2026 dan boshlab. */
+let setupBusy=false;
+function runSetup(){
+  if(DEMO||setupBusy||!S.setReady||!S.ready.xod||S.set.setupShox1)return;
+  const x=S.xod.find(z=>/^sh[oa][xh]?j[ao][xh]on/.test(keyName(z.name).replace(/'/g,''))&&!z.arch);
+  if(!x)return; // Shoxjaxon hali qo'shilmagan bo'lsa, qo'shilgach bajariladi
+  setupBusy=true;const from='2026-10';
+  const put=(m,v)=>{const o=Object.assign({},m||{});o[from]=v;Object.keys(o).forEach(k=>{if(k>from)delete o[k]});return o};
+  const data={sal:put(x.sal,1000000),salUsd:put(x.salUsd,400),cut:put(x.cut,0),cutUsd:put(x.cutUsd,16)};
+  // so'mda yozilgan pullar avans hisoblanadi; valyutasi yo'q eski yozuvlar so'm deb olinadi
+  db.collection(COL.xod).doc(x.id).update(data)
+    .then(()=>db.collection('d_sozlama').doc('main').set({setupShox1:true},{merge:true}))
+    .then(()=>toast(x.name+': 1 000 000 so\'m + 400 $, kelmagan kun 16 $ — qayta hisoblandi'))
+    .catch(e=>{console.error(e);setupBusy=false}); // muvaffaqiyatli bo'lsa, qayta ishga tushmaydi
+}
 const save=(p,ok)=>p.then(()=>{if(ok)toast(ok)}).catch(e=>{console.error(e);toast("Saqlab bo'lmadi: internetni tekshiring")});
 
 /* ---------- Qarz hisoblari ---------- */
