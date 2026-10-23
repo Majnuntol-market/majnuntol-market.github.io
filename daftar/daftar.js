@@ -169,6 +169,7 @@ function render(){
   window.scrollTo(0,y);
   bindView();
   if(sheetRefresh)sheetRefresh();
+  syncViews();
 }
 
 function viewHome(){
@@ -404,6 +405,7 @@ function xodimSheet(id){
         const val=r.type==='kelmadi'?daysText(Number(r.days)||1):(r.type==='bonus'?'+':'−')+money(r.amount,r.cur==='USD'?'USD':'UZS');
         return '<button class="item" data-r="'+r.id+'"><div style="min-width:0"><div class="t">'+OT[r.type]+(r.note?' · <span class="muted">'+esc(r.note)+'</span>':'')+'</div><div class="s">'+fmtDate(r.date)+'</div></div><span class="num '+sign+'">'+val+'</span></button>'}).join(''):'<div class="empty">Bu oyda yozuv yo\'q</div>')+'</div></section>';
     h+='<p class="muted" style="margin:0">'+(p.rate.fixed?'Kelmagan har bir kun uchun '+money(p.rate.daily,p.rate.cur)+' ayriladi, yarim kunga — '+money(p.rate.daily/2,p.rate.cur)+'.':'Kelmagan kun: oylik ÷ '+p.rate.div+' kun = '+money(p.rate.daily,p.rate.cur)+'.')+' O\'zgartirish uchun oylik summasini bosing.</p>';
+    if(!x.arch)h+='<button class="btn ghost" id="xLink">📱 '+(x.viewKey?'Xodim ilovasi havolasi':'Xodimga ilova berish')+'</button>';
     h+='<div class="grid2"><button class="btn ghost" id="xEdit">Ism / telefon</button>'+(x.arch?'<button class="btn" id="xRestore">Qaytarish</button>':'<button class="btn danger" id="xArch">Olib tashlash</button>')+'</div>';
     if(x.arch)h+='<button class="btn danger" id="xDelete">Butunlay o\'chirish</button>';
     const r=$('sheet');r.innerHTML=h;
@@ -413,10 +415,11 @@ function xodimSheet(id){
     r.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>entryForm(x,b.dataset.t));
     r.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>entryForm(x,null,p.rows.find(z=>z.id===b.dataset.r)));
     $('xEdit').onclick=()=>xodimForm(x);
-    if($('xArch'))$('xArch').onclick=()=>{if(confirm(x.name+' ro\'yxatdan olib tashlansinmi? Hisob-kitoblari saqlanib qoladi.')){save(store.update('xod',x.id,{arch:true}),'Olib tashlandi');closeSheet()}};
+    if($('xLink'))$('xLink').onclick=()=>linkSheet(x.id);
+    if($('xArch'))$('xArch').onclick=()=>{if(confirm(x.name+' ro\'yxatdan olib tashlansinmi? Hisob-kitoblari saqlanib qoladi.')){dropView(x);save(store.update('xod',x.id,{arch:true,viewKey:''}),'Olib tashlandi');closeSheet()}};
     if($('xRestore'))$('xRestore').onclick=()=>{save(store.update('xod',x.id,{arch:false}),'Qaytarildi');closeSheet()};
     if($('xDelete'))$('xDelete').onclick=()=>{if(confirm(x.name+' va uning barcha yozuvlari butunlay o\'chirilsinmi? Buni qaytarib bo\'lmaydi.')){
-      S.oy.filter(z=>z.xid===x.id).forEach(z=>store.del('oy',z.id));save(store.del('xod',x.id),'O\'chirildi');closeSheet()}};
+      dropView(x);S.oy.filter(z=>z.xid===x.id).forEach(z=>store.del('oy',z.id));save(store.del('xod',x.id),'O\'chirildi');closeSheet()}};
   };
   $('sheet').hidden=false;$('sheetBg').hidden=false;$('sheet').scrollTop=0;
   draw();sheetRefresh=draw;
@@ -425,6 +428,45 @@ function importOld(){
   const seed=[['Iqbolmirzo'],['Shoxjaxon'],['Hayrullo']];
   seed.forEach(s=>store.add('xod',{name:s[0],tel:'',sal:{},arch:false,created:Date.now()}));
   toast('Qo\'shildi. Endi har biriga oylik belgilang.');
+}
+
+/* ---------- Xodim ilovasi (faqat ko'rish) ---------- */
+// Har bir xodimga tasodifiy kalit beriladi. Daftarcha uning oxirgi 3 oylik hisobini d_view/{kalit} ga yozadi.
+// Xodim sahifasi (../maosh/#kalit) faqat shu bitta hujjatni o'qiy oladi — boshqa hech narsani emas.
+const VIEW='d_view';
+const newKey=()=>{const a=new Uint8Array(18);crypto.getRandomValues(a);return Array.from(a,b=>'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b%56]).join('')};
+const viewUrl=k=>new URL('../maosh/#'+k,location.href).href;
+function viewData(x){
+  const months={};
+  [0,-1,-2].forEach(n=>{const k=shiftMonth(ym(),n),p=payroll(x,k);if(!any(p.sal)&&!p.rows.length)return;
+    months[k]={sal:p.sal,rate:{cur:p.rate.cur,daily:p.rate.cur==='USD'?Math.round(p.rate.daily*100)/100:Math.round(p.rate.daily)},absent:p.absent,cut:p.cut,adv:p.adv,bonus:p.bonus,fine:p.fine,paid:p.paid,earned:p.earned,left:p.left,
+      rows:p.rows.map(r=>{const o={type:r.type,date:r.date||''};if(r.type==='kelmadi')o.days=Number(r.days)||1;else{o.amount=r.amount||0;o.cur=r.cur==='USD'?'USD':'UZS'}return o})}});
+  return {name:x.name,months};
+}
+const lastView={};
+function syncViews(){
+  if(DEMO||!db||!S.ready.xod||!S.ready.oy||!S.setReady)return;
+  S.xod.forEach(x=>{if(!x.viewKey||x.arch)return;
+    const d=viewData(x),j=JSON.stringify(d);if(lastView[x.viewKey]===j)return;lastView[x.viewKey]=j;
+    db.collection(VIEW).doc(x.viewKey).set(Object.assign(d,{updated:Date.now()})).catch(e=>{console.error(e);delete lastView[x.viewKey]})});
+}
+function dropView(x){if(x.viewKey&&!DEMO&&db)db.collection(VIEW).doc(x.viewKey).delete().catch(()=>{})}
+function linkSheet(id){
+  const x=S.xod.find(z=>z.id===id);if(!x)return;
+  if(!x.viewKey){const k=newKey();x.viewKey=k;save(store.update('xod',x.id,{viewKey:k}));if(!DEMO)syncViews()}
+  const url=viewUrl(x.viewKey);
+  const msg=x.name+', bu sizning maosh ilovangiz. Oyligingiz, avanslar va kelmagan kunlarni shu yerda ko\'rib borasiz:\n'+url;
+  sheet('<h3>'+esc(x.name)+' uchun ilova</h3>'
+    +'<p class="muted" style="margin:0;line-height:1.5">Xodim bu havola orqali faqat <b>o\'z</b> oyligini ko\'radi: oylik, avanslar, kelmagan kunlar va qancha qolgani. Hech narsani o\'zgartira olmaydi.</p>'
+    +'<div class="card" style="word-break:break-all;font-family:var(--mono);font-size:13px">'+esc(url)+'</div>'
+    +'<a class="btn" style="text-decoration:none" target="_blank" rel="noopener" href="https://t.me/share/url?url='+encodeURIComponent(url)+'&text='+encodeURIComponent(x.name+', bu sizning maosh ilovangiz. Oyligingizni shu yerda ko\'rib borasiz.')+'">Telegram orqali yuborish</a>'
+    +'<div class="grid2"><button class="btn ghost" id="lCopy">Nusxalash</button><a class="btn ghost" style="text-decoration:none" target="_blank" rel="noopener" href="'+esc(url)+'">Ochib ko\'rish</a></div>'
+    +'<p class="muted" style="margin:0;line-height:1.5">Telefonda ochgach, brauzer menyusidan «Bosh ekranga qo\'shish» ni bossa, ilova bo\'lib turadi.</p>'
+    +'<button class="btn danger" id="lRevoke">Havolani bekor qilish</button>'
+    +'<button class="btn ghost" id="lBack">‹ Orqaga</button>',
+  ()=>{$('lBack').onclick=()=>xodimSheet(x.id);
+    $('lCopy').onclick=()=>{(navigator.clipboard?navigator.clipboard.writeText(msg):Promise.reject()).then(()=>toast('Nusxalandi')).catch(()=>{prompt('Nusxalab oling:',url)})};
+    $('lRevoke').onclick=()=>{if(!confirm('Eski havola ishlamay qoladi. Davom etilsinmi?'))return;dropView(x);delete lastView[x.viewKey];save(store.update('xod',x.id,{viewKey:''}),'Havola bekor qilindi');xodimSheet(x.id)}});
 }
 
 /* ---------- Eslatmalar ---------- */

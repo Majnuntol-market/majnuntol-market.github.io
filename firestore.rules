@@ -1,5 +1,5 @@
 rules_version = '2';
-// Majnuntol Market — Firestore qoidalari (xodimlar ilovasi YOPIQ holat, v14).
+// Majnuntol Market — Firestore qoidalari (daftarcha + xodimlarga faqat o'qish havolasi).
 // Baza to'liq saqlanadi, lekin faqat rahbar o'qiy va o'zgartira oladi.
 // Firebase Console → Firestore Database → Rules bo'limiga to'liq nusxalab qo'ying va "Publish" bosing.
 // Xodimlar uchun ochiq eski qoidalar Git'dagi "arxiv-v13" branch'ida saqlangan.
@@ -12,6 +12,11 @@ service cloud.firestore {
     // Hamma narsa (xodimlar, javoblar, rasmlar, chat, sozlamalar) — faqat rahbar
     match /{document=**} {
       allow read, write: if isOwner();
+    }
+
+    // Xodim ilovasi: maxfiy havola egasi faqat o'zining bitta hujjatini o'qiy oladi (ro'yxat yo'q)
+    match /d_view/{key} {
+      allow get: if true;
     }
   }
 }
