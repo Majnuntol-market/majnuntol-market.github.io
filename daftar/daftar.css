@@ -82,3 +82,4 @@ h2{margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:v
 .done .t{text-decoration:line-through;color:var(--muted)}
 .stat.tap{appearance:none;cursor:pointer;text-align:left;align-items:flex-start;width:100%;font:inherit;color:inherit}
 .card.month{flex-direction:row;padding:8px}
+.stat .num{white-space:normal;overflow:visible}

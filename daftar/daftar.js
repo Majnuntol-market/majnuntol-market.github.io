@@ -24,7 +24,8 @@ const msToLocalInput=ms=>{const d=tk(ms);return ymd(ms)+'T'+pad(d.getUTCHours())
 
 /* ---------- Pul ---------- */
 const group=n=>String(Math.round(Math.abs(n))).replace(/\B(?=(\d{3})+(?!\d))/g,' ');
-const money=(n,cur)=>(n<0?'−':'')+(cur==='USD'?'$'+group(n):group(n)+" so'm");
+const usd=n=>{const v=Math.round(Math.abs(n)*100)/100,i=Math.floor(v),c=Math.round((v-i)*100);return group(i)+(c?','+pad(c):'')};
+const money=(n,cur)=>(n<0?'−':'')+(cur==='USD'?usd(n)+' $':group(n)+" so'm");
 const parseAmount=v=>{const n=Number(String(v||'').replace(/[^\d]/g,''));return isFinite(n)?n:0};
 const bindAmount=el=>{if(!el)return;el.addEventListener('input',()=>{const n=parseAmount(el.value);el.value=n?group(n):''})};
 
@@ -84,22 +85,37 @@ function people(){
 }
 function totals(ps){const t={in:{UZS:0,USD:0},out:{UZS:0,USD:0}};ps.forEach(p=>['UZS','USD'].forEach(c=>{if(p.bal[c]>0)t.in[c]+=p.bal[c];else t.out[c]-=p.bal[c]}));return t}
 const balText=(bal,cls)=>{const parts=['UZS','USD'].filter(c=>bal[c]).map(c=>'<span class="num'+(cls?' '+(bal[c]>0?'plus':'minus'):'')+'">'+money(cls?Math.abs(bal[c]):bal[c],c)+'</span>');return parts.length?parts.join(' · '):'<span class="num">0</span>'};
+const salText=o=>{const parts=CUR.filter(c=>o[c]).map(c=>money(o[c],c));return parts.length?parts.join(' + '):"0 so'm"};
 const sumText=(o)=>{const parts=['UZS','USD'].filter(c=>o[c]).map(c=>money(o[c],c));return parts.length?parts.join(' · '):"0 so'm"};
 
 /* ---------- Oylik hisoblari ---------- */
 function mapFor(s,k){s=s||{};let best=null;Object.keys(s).forEach(m=>{if(m<=k&&(best===null||m>best))best=m});return best===null?0:(s[best]||0)}
-function salaryFor(x,k){const s=x.sal||{};let best=null;Object.keys(s).forEach(m=>{if(m<=k&&(best===null||m>best))best=m});return best===null?0:(s[best]||0)}
+function salaryFor(x,k){return mapFor(x.sal,k)}
 function divisor(k){const d=S.set.div;return d==='30'?30:d==='26'?26:daysIn(k)}
+const CUR=['UZS','USD'];
+const zero=()=>({UZS:0,USD:0});
+// Kelmagan kun narxi: belgilangan $ → belgilangan so'm → avtomatik (oylik ÷ kunlar)
+function dayRate(x,k){
+  const fu=mapFor(x.cutUsd,k),fz=mapFor(x.cut,k);
+  if(fu)return {cur:'USD',daily:fu,fixed:true};
+  if(fz)return {cur:'UZS',daily:fz,fixed:true};
+  const su=mapFor(x.sal,k),sd=mapFor(x.salUsd,k),div=divisor(k);
+  if(su)return {cur:'UZS',daily:su/div,fixed:false,div};
+  if(sd)return {cur:'USD',daily:sd/div,fixed:false,div};
+  return {cur:'UZS',daily:0,fixed:false,div};
+}
 function payroll(x,k){
   const rows=S.oy.filter(r=>r.xid===x.id&&r.month===k).sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.created||0)-(b.created||0));
-  const sal=salaryFor(x,k),div=divisor(k),fixed=mapFor(x.cut,k),daily=fixed||sal/div;
-  let absent=0,adv=0,bonus=0,fine=0,paid=0;
-  rows.forEach(r=>{if(r.type==='kelmadi')absent+=Number(r.days)||1;else if(r.type==='avans')adv+=r.amount||0;else if(r.type==='bonus')bonus+=r.amount||0;else if(r.type==='jarima')fine+=r.amount||0;else if(r.type==='tolov')paid+=r.amount||0});
-  const cut=Math.round(daily*absent);
-  const earned=sal-cut+bonus-fine;
-  const left=earned-adv-paid;
-  return {rows,sal,div,daily,fixed,absent,cut,adv,bonus,fine,paid,earned,left};
+  const sal={UZS:mapFor(x.sal,k),USD:mapFor(x.salUsd,k)},rate=dayRate(x,k);
+  let absent=0;const adv=zero(),bonus=zero(),fine=zero(),paid=zero(),cut=zero(),earned=zero(),left=zero();
+  rows.forEach(r=>{const c=r.cur==='USD'?'USD':'UZS',a=r.amount||0;
+    if(r.type==='kelmadi')absent+=Number(r.days)||1;else if(r.type==='avans')adv[c]+=a;else if(r.type==='bonus')bonus[c]+=a;else if(r.type==='jarima')fine[c]+=a;else if(r.type==='tolov')paid[c]+=a});
+  cut[rate.cur]=rate.cur==='USD'?Math.round(rate.daily*absent*100)/100:Math.round(rate.daily*absent);
+  CUR.forEach(c=>{earned[c]=sal[c]-cut[c]+bonus[c]-fine[c];left[c]=Math.round((earned[c]-adv[c]-paid[c])*100)/100});
+  return {rows,sal,rate,absent,cut,adv,bonus,fine,paid,earned,left};
 }
+const any=o=>!!(o.UZS||o.USD);
+const addTo=(t,o)=>CUR.forEach(c=>t[c]+=o[c]);
 const OT={avans:'Avans (pul oldi)',kelmadi:'Kelmadi',bonus:'Bonus / qo\'shimcha',jarima:'Jarima / ushlab qolish',tolov:'Oylik berildi'};
 const daysText=d=>d===0.5?'yarim kun':(d%1?String(d).replace('.',','):d)+' kun';
 
@@ -131,11 +147,11 @@ function viewHome(){
   const due=S.esl.filter(e=>!e.done&&e.at<=now+864e5).sort((a,b)=>a.at-b.at);
   const lateQ=ps.filter(p=>p.due&&p.due<=td);
   const act=S.xod.filter(x=>!x.arch);
-  let pay=0;act.forEach(x=>pay+=payroll(x,ym()).left);
+  const pay=zero();act.forEach(x=>addTo(pay,payroll(x,ym()).left));
   let h=header('Bugun, '+fmtDate(td).slice(0,5),gear);
   h+='<div class="grid2"><button class="stat tap" data-go="qarz"><span class="muted">Menga qarzdor</span><span class="num plus">'+sumText(t.in)+'</span></button>'
    +'<button class="stat tap" data-go="qarz"><span class="muted">Men qarzdorman</span><span class="num minus">'+sumText(t.out)+'</span></button></div>';
-  h+='<button class="stat tap" data-go="xodim"><span class="muted">'+MONTHS[+ym().slice(5)-1]+' oyligi, berilishi kerak ('+act.length+' xodim)</span><span class="num big">'+money(pay,'UZS')+'</span></button>';
+  h+='<button class="stat tap" data-go="xodim"><span class="muted">'+MONTHS[+ym().slice(5)-1]+' oyligi, berilishi kerak ('+act.length+' xodim)</span><span class="num big">'+sumText(pay)+'</span></button>';
   h+='<section class="card"><div class="row"><h2>Eslatmalar</h2><button class="btn sm ghost" data-add="esl">+ Qo\'shish</button></div>';
   if(!due.length&&!lateQ.length)h+='<div class="empty">Bugunga eslatma yo\'q</div>';
   else{h+='<div class="list">';
@@ -167,14 +183,15 @@ function viewXodim(){
   const list=S.xod.filter(x=>showArch?x.arch:!x.arch).sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   let h=header('Xodimlar',gear);
   h+='<div class="card month"><button class="icon-btn" id="mPrev" aria-label="Oldingi oy">‹</button><b>'+monthName(xMonth)+'</b><button class="icon-btn" id="mNext" aria-label="Keyingi oy">›</button></div>';
-  if(!showArch){let tot=0,adv=0;list.forEach(x=>{const p=payroll(x,xMonth);tot+=p.left;adv+=p.adv});
-    h+='<div class="grid2"><div class="stat"><span class="muted">Berilishi kerak</span><span class="num">'+money(tot,'UZS')+'</span></div><div class="stat"><span class="muted">Avans berilgan</span><span class="num">'+money(adv,'UZS')+'</span></div></div>'}
+  if(!showArch){const tot=zero(),adv=zero();list.forEach(x=>{const p=payroll(x,xMonth);addTo(tot,p.left);addTo(adv,p.adv)});
+    h+='<div class="grid2"><div class="stat"><span class="muted">Berilishi kerak</span><span class="num">'+sumText(tot)+'</span></div><div class="stat"><span class="muted">Avans berilgan</span><span class="num">'+sumText(adv)+'</span></div></div>'}
   h+='<section class="card"><div class="list">';
   if(!list.length){h+='<div class="empty">'+(showArch?'Olib tashlangan xodim yo\'q':'Xodim qo\'shilmagan. Pastdagi «+» tugmasini bosing.')+'</div>';
     if(!showArch&&!S.xod.length&&!DEMO)h+='<button class="btn ghost" id="importOld">Eski ro\'yxatdan qo\'shish (Iqbolmirzo, Shoxjaxon, Hayrullo)</button>'}
   list.forEach(x=>{const p=payroll(x,xMonth);
-    const bits=[];if(p.absent)bits.push(daysText(p.absent)+' kelmadi');if(p.adv)bits.push('avans '+group(p.adv));if(p.paid)bits.push('berildi '+group(p.paid));
-    h+='<button class="item" data-x="'+x.id+'"><div style="min-width:0"><div class="t">'+esc(x.name)+'</div><div class="s">Oylik '+money(p.sal,'UZS')+(bits.length?' · '+bits.join(' · '):'')+'</div></div><div style="text-align:right"><div class="num '+(p.left<0?'minus':'')+'">'+money(p.left,'UZS')+'</div><div class="s muted">'+(p.left===0&&p.paid?'to\'landi':'qoldi')+'</div></div></button>'});
+    const bits=[];if(p.absent)bits.push(daysText(p.absent)+' kelmadi');if(any(p.adv))bits.push('avans '+sumText(p.adv));if(any(p.paid))bits.push('berildi '+sumText(p.paid));
+    const neg=p.left.UZS<0||p.left.USD<0,done=!any(p.left)&&any(p.paid);
+    h+='<button class="item" data-x="'+x.id+'"><div style="min-width:0"><div class="t">'+esc(x.name)+'</div><div class="s">Oylik '+salText(p.sal)+(bits.length?' · '+bits.join(' · '):'')+'</div></div><div style="text-align:right">'+CUR.filter(c=>p.left[c]||(c==='UZS'&&!p.left.USD)).map(c=>'<div class="num '+(p.left[c]<0?'minus':'')+'">'+money(p.left[c],c)+'</div>').join('')+'<div class="s muted">'+(done?'to\'landi':'qoldi')+'</div></div></button>'});
   h+='</div></section>';
   h+='<button class="btn ghost" id="archT">'+(showArch?'‹ Faol xodimlar':'Olib tashlangan xodimlar')+'</button>';
   return h;
@@ -260,52 +277,69 @@ function personSheet(key){
 }
 
 /* ---------- Xodim formalari ---------- */
+function payFields(x,k){
+  x=x||{};const fu=mapFor(x.cutUsd,k),fz=mapFor(x.cut,k),sz=mapFor(x.sal,k),sd=mapFor(x.salUsd,k);
+  return '<div class="grid2">'+field('Oylik, so\'m','<input id="pSz" class="amount" inputmode="numeric" placeholder="0" value="'+(sz?group(sz):'')+'">')
+    +field('Oylik, $','<input id="pSd" class="amount" inputmode="numeric" placeholder="0" value="'+(sd?group(sd):'')+'">')+'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 110px;gap:8px">'+field('Kelmagan 1 kun uchun ayriladi','<input id="pCut" class="amount" inputmode="numeric" placeholder="Avtomatik" value="'+(fu?group(fu):fz?group(fz):'')+'">')
+    +field('Valyuta','<select id="pCutCur"><option value="USD"'+(fu||(!fz&&sd&&!sz)?' selected':'')+'>$</option><option value="UZS"'+(fz||(!fu&&!(sd&&!sz))?' selected':'')+'>so\'m</option></select>')+'</div>'
+    +'<p class="muted" style="margin:-4px 0 0">Yarim kunga buning yarmi ayriladi. Bo\'sh qoldirsangiz, oylikdan avtomatik hisoblanadi.</p>'
+    +field('Qaysi oydan boshlab','<input id="pFrom" type="month" value="'+k+'">');
+}
+function readPay(x){
+  x=x||{};const from=$('pFrom').value||xMonth,sz=parseAmount($('pSz').value),sd=parseAmount($('pSd').value),c=parseAmount($('pCut').value),cc=$('pCutCur').value;
+  if(!sz&&!sd){toast('Oylikni yozing');return null}
+  const put=(m,v)=>{const o=Object.assign({},m||{});o[from]=v;Object.keys(o).forEach(k=>{if(k>from)delete o[k]});return o};
+  return {from,data:{sal:put(x.sal,sz),salUsd:put(x.salUsd,sd),cut:put(x.cut,cc==='UZS'?c:0),cutUsd:put(x.cutUsd,cc==='USD'?c:0)}};
+}
 function xodimForm(x){
   x=x||{};
   sheet('<h3>'+(x.id?'Xodimni tahrirlash':'Yangi xodim')+'</h3>'
     +field('Ism','<input id="xName" placeholder="Masalan, Shoxjaxon" value="'+esc(x.name||'')+'">')
-    +(x.id?'':field('Oylik (so\'m)','<input id="xSal" class="amount" inputmode="numeric" placeholder="5 000 000">')+field('Kelmagan kun uchun ayriladi (so\'m)','<input id="xCut" class="amount" inputmode="numeric" placeholder="Bo\'sh — avtomatik">')+field('Qaysi oydan','<input id="xFrom" type="month" value="'+xMonth+'">'))
+    +(x.id?'':payFields(null,xMonth))
     +field('Telefon','<input id="xTel" type="tel" placeholder="Ixtiyoriy" value="'+esc(x.tel||'')+'">')
-    +'<div class="actions"><button class="btn ghost" data-close>Bekor</button><button class="btn" id="xSave">Saqlash</button></div>',
+    +'<div class="actions"><button class="btn ghost" '+(x.id?'id="xBack"':'data-close')+'>Bekor</button><button class="btn" id="xSave">Saqlash</button></div>',
   ()=>{if(!x.id)setTimeout(()=>$('xName').focus(),50);
+    if($('xBack'))$('xBack').onclick=()=>xodimSheet(x.id);
     $('xSave').onclick=()=>{const name=normName($('xName').value);if(!name){toast('Ismni yozing');return}
       if(x.id){save(store.update('xod',x.id,{name,tel:$('xTel').value.trim()}),'Saqlandi');xodimSheet(x.id);return}
-      const sal=parseAmount($('xSal').value);if(!sal){toast('Oylikni yozing');return}
-      save(store.add('xod',{name,tel:$('xTel').value.trim(),sal:{[$('xFrom').value||xMonth]:sal},cut:{[$('xFrom').value||xMonth]:parseAmount($('xCut').value)},arch:false,created:Date.now()}),name+' qo\'shildi');closeSheet()}});
+      const r=readPay();if(!r)return;
+      save(store.add('xod',Object.assign({name,tel:$('xTel').value.trim(),arch:false,created:Date.now()},r.data)),name+' qo\'shildi');closeSheet()}});
 }
 function salaryForm(x){
-  const fx=mapFor(x.cut,xMonth);
-  sheet('<h3>'+esc(x.name)+' oyligi</h3>'
-    +field('Oylik (so\'m)','<input id="sAmt" class="amount" inputmode="numeric" value="'+group(salaryFor(x,xMonth))+'">')
-    +field('Kelmagan har bir kun uchun ayriladi (so\'m)','<input id="sCut" class="amount" inputmode="numeric" placeholder="Avtomatik: oylik ÷ kunlar" value="'+(fx?group(fx):'')+'">')
-    +'<p class="muted" style="margin:-4px 0 0">Bo\'sh qoldirsangiz, oylikdan avtomatik hisoblanadi. Yarim kunga buning yarmi ayriladi.</p>'
-    +field('Qaysi oydan boshlab','<input id="sFrom" type="month" value="'+xMonth+'">')
+  sheet('<h3>'+esc(x.name)+' oyligi</h3>'+payFields(x,xMonth)
     +'<p class="muted" style="margin:0">Oldingi oylar hisobi o\'zgarmaydi.</p>'
-    +'<div class="actions"><button class="btn ghost" data-close>Bekor</button><button class="btn" id="sSave">Saqlash</button></div>',
-  ()=>{$('sSave').onclick=()=>{const v=parseAmount($('sAmt').value),from=$('sFrom').value||xMonth;if(!v){toast('Summani yozing');return}
-    const sal=Object.assign({},x.sal||{});sal[from]=v;
-    // shu oydan keyingi eski belgilashlar ham yangi qiymatga teng bo'ladi
-    Object.keys(sal).forEach(k=>{if(k>from)delete sal[k]});
-    const cut=Object.assign({},x.cut||{});cut[from]=parseAmount($('sCut').value);
-    Object.keys(cut).forEach(k=>{if(k>from)delete cut[k]});
-    const p=DEMO?store.update('xod',x.id,{sal,cut}):db.collection(COL.xod).doc(x.id).update({sal,cut});
-    save(p,'Saqlandi — '+monthName(from)+'dan');xodimSheet(x.id)}});
+    +'<div class="actions"><button class="btn ghost" id="sBack">Bekor</button><button class="btn" id="sSave">Saqlash</button></div>',
+  ()=>{$('sBack').onclick=()=>xodimSheet(x.id);
+    $('sSave').onclick=()=>{const r=readPay(x);if(!r)return;
+    const p=DEMO?store.update('xod',x.id,r.data):db.collection(COL.xod).doc(x.id).update(r.data);
+    save(p,'Saqlandi — '+monthName(r.from)+'dan');xodimSheet(x.id)}});
 }
 function entryForm(x,type,e){
   e=e||{};
   const isNew=!e.id;type=e.type||type;
   const dateDef=xMonth===ym()?today():xMonth+'-01';
+  const p=payroll(x,xMonth);
+  // standart valyuta: avans — so'm; to'lov — qoldig'i bor valyuta; jarima — kunlik ayirish valyutasi
+  let cur=e.cur||(type==='tolov'?(p.left.UZS>0?'UZS':p.left.USD>0?'USD':'UZS'):type==='jarima'?p.rate.cur:'UZS');
   let body='';
-  if(type==='kelmadi')body=segHtml('days',[['1','To\'liq kun'],['0.5','Yarim kun']],String(e.days||1))+field('Sana','<input id="eDate" type="date" value="'+(e.date||dateDef)+'">');
-  else body=field('Summa (so\'m)','<input id="eAmt" class="amount" inputmode="numeric" placeholder="0" value="'+(e.amount?group(e.amount):'')+'">')+field('Sana','<input id="eDate" type="date" value="'+(e.date||dateDef)+'">');
+  if(type==='kelmadi')body=segHtml('days',[['1','To\'liq kun'],['0.5','Yarim kun']],String(e.days||1))
+    +'<p class="muted" id="kHint" style="margin:-4px 0 0"></p>'+field('Sana','<input id="eDate" type="date" value="'+(e.date||dateDef)+'">');
+  else body='<div style="display:grid;grid-template-columns:1fr 110px;gap:8px">'+field('Summa','<input id="eAmt" class="amount" inputmode="numeric" placeholder="0" value="'+(e.amount?group(e.amount):'')+'">')
+    +field('Valyuta','<select id="eCur"><option value="UZS">so\'m</option><option value="USD"'+(cur==='USD'?' selected':'')+'>$</option></select>')+'</div>'
+    +field('Sana','<input id="eDate" type="date" value="'+(e.date||dateDef)+'">');
   body+=field('Izoh','<input id="eNote" placeholder="Ixtiyoriy" value="'+esc(e.note||'')+'">');
-  if(type==='tolov'&&isNew){const p=payroll(x,xMonth);if(p.left>0)setTimeout(()=>{if($('eAmt'))$('eAmt').value=group(p.left)},0)}
   sheet('<h3>'+esc(x.name)+': '+OT[type]+'</h3>'+body
     +'<div class="actions">'+(isNew?'<button class="btn ghost" id="eBack">Bekor</button>':'<button class="btn danger" id="eDel">O\'chirish</button>')+'<button class="btn" id="eSave">Saqlash</button></div>',
-  r=>{if(type==='kelmadi')segBind(r,'days');else if(isNew&&type!=='tolov')setTimeout(()=>$('eAmt').focus(),50);
+  r=>{
+    if(type==='kelmadi'){const h=v=>{$('kHint').textContent=p.rate.daily?'Oylikdan '+money(p.rate.daily*Number(v),p.rate.cur)+' ayriladi':''};segBind(r,'days',h);h(segVal(r,'days'))}
+    else{
+      const fill=()=>{if(type==='tolov'&&isNew){const c=$('eCur').value;$('eAmt').value=p.left[c]>0?group(p.left[c]):''}};
+      $('eCur').onchange=fill;fill();
+      if(isNew&&type!=='tolov')setTimeout(()=>$('eAmt').focus(),50)}
     $('eSave').onclick=()=>{const date=$('eDate').value||dateDef;
       const d={xid:x.id,type,date,month:date.slice(0,7),note:$('eNote').value.trim()};
-      if(type==='kelmadi')d.days=Number(segVal(r,'days'));else{d.amount=parseAmount($('eAmt').value);if(!d.amount){toast('Summani yozing');return}}
+      if(type==='kelmadi')d.days=Number(segVal(r,'days'));else{d.amount=parseAmount($('eAmt').value);d.cur=$('eCur').value;if(!d.amount){toast('Summani yozing');return}}
       if(d.month!==xMonth)xMonth=d.month;
       if(isNew){d.created=Date.now();save(store.add('oy',d),'Yozildi')}else save(store.update('oy',e.id,d),'Saqlandi');
       xodimSheet(x.id)};
@@ -318,23 +352,26 @@ function xodimSheet(id){
     const p=payroll(x,xMonth);
     let h='<div class="grab"></div><div class="row"><h3>'+esc(x.name)+'</h3><button class="btn sm ghost" data-close>Yopish</button></div>';
     h+='<div class="month"><button class="icon-btn" id="smPrev">‹</button><b>'+monthName(xMonth)+'</b><button class="icon-btn" id="smNext">›</button></div>';
+    const neg=o=>CUR.filter(c=>o[c]).map(c=>'−'+money(o[c],c)).join(' · ');
+    const pos=o=>CUR.filter(c=>o[c]).map(c=>'+'+money(o[c],c)).join(' · ');
+    const totCur=CUR.filter(c=>p.sal[c]||p.left[c]||c==='UZS'&&!p.sal.USD&&!p.left.USD);
     h+='<section class="card calc">'
-      +'<div class="row"><span>Oylik</span><button class="btn sm ghost num" id="salEdit">'+money(p.sal,'UZS')+' ✎</button></div>'
-      +(p.absent?'<div class="row"><span>Kelmadi: '+daysText(p.absent)+' <span class="muted">(kuniga '+group(p.daily)+')</span></span><span class="num minus">−'+group(p.cut)+'</span></div>':'')
-      +(p.bonus?'<div class="row"><span>Bonus</span><span class="num plus">+'+group(p.bonus)+'</span></div>':'')
-      +(p.fine?'<div class="row"><span>Jarima</span><span class="num minus">−'+group(p.fine)+'</span></div>':'')
-      +'<div class="row"><span>Ishlab topgani</span><span class="num">'+money(p.earned,'UZS')+'</span></div>'
-      +(p.adv?'<div class="row"><span>Avans olgan</span><span class="num minus">−'+group(p.adv)+'</span></div>':'')
-      +(p.paid?'<div class="row"><span>Oylik berildi</span><span class="num minus">−'+group(p.paid)+'</span></div>':'')
-      +'<div class="row tot"><span>'+(p.left<0?'Ortiqcha berilgan':'Berilishi kerak')+'</span><span class="num '+(p.left<0?'minus':'')+'">'+money(Math.abs(p.left),'UZS')+'</span></div>'
+      +'<div class="row"><span>Oylik</span><button class="btn sm ghost num" id="salEdit">'+salText(p.sal)+' ✎</button></div>'
+      +(p.absent?'<div class="row"><span>Kelmadi: '+daysText(p.absent)+' <span class="muted">(kuniga '+money(p.rate.daily,p.rate.cur)+')</span></span><span class="num minus">'+neg(p.cut)+'</span></div>':'')
+      +(any(p.bonus)?'<div class="row"><span>Bonus</span><span class="num plus">'+pos(p.bonus)+'</span></div>':'')
+      +(any(p.fine)?'<div class="row"><span>Jarima</span><span class="num minus">'+neg(p.fine)+'</span></div>':'')
+      +'<div class="row"><span>Ishlab topgani</span><span class="num">'+salText(p.earned)+'</span></div>'
+      +(any(p.adv)?'<div class="row"><span>Avans olgan</span><span class="num minus">'+neg(p.adv)+'</span></div>':'')
+      +(any(p.paid)?'<div class="row"><span>Oylik berildi</span><span class="num minus">'+neg(p.paid)+'</span></div>':'')
+      +totCur.map((c,ix)=>'<div class="row'+(ix===0?' tot':'')+'" style="font-weight:700;font-size:16px"><span>'+(p.left[c]<0?'Ortiqcha berilgan':'Berilishi kerak')+(totCur.length>1?(c==='USD'?' ($)':' (so\'m)'):'')+'</span><span class="num '+(p.left[c]<0?'minus':'')+'">'+money(Math.abs(p.left[c]),c)+'</span></div>').join('')
       +'</section>';
     h+='<div class="grid2"><button class="btn ghost" data-t="avans">💵 Avans berdim</button><button class="btn ghost" data-t="kelmadi">✕ Kelmadi</button><button class="btn ghost" data-t="bonus">+ Bonus</button><button class="btn ghost" data-t="jarima">− Jarima</button></div>';
     h+='<button class="btn" data-t="tolov">✓ Oylikni berdim</button>';
     h+='<section class="card"><h2>'+monthName(xMonth)+' yozuvlari</h2><div class="list">'+(p.rows.length?p.rows.map(r=>{
         const sign=r.type==='bonus'?'plus':r.type==='kelmadi'?'warn':'minus';
-        const val=r.type==='kelmadi'?daysText(Number(r.days)||1):(r.type==='bonus'?'+':'−')+group(r.amount);
+        const val=r.type==='kelmadi'?daysText(Number(r.days)||1):(r.type==='bonus'?'+':'−')+money(r.amount,r.cur==='USD'?'USD':'UZS');
         return '<button class="item" data-r="'+r.id+'"><div style="min-width:0"><div class="t">'+OT[r.type]+(r.note?' · <span class="muted">'+esc(r.note)+'</span>':'')+'</div><div class="s">'+fmtDate(r.date)+'</div></div><span class="num '+sign+'">'+val+'</span></button>'}).join(''):'<div class="empty">Bu oyda yozuv yo\'q</div>')+'</div></section>';
-    h+='<p class="muted" style="margin:0">'+(p.fixed?'Kelmagan har bir kun uchun '+money(p.fixed,'UZS')+' ayriladi (siz belgilagan).':'Kelmagan kun: oylik ÷ '+p.div+' kun = '+money(p.daily,'UZS')+'.')+' O\'zgartirish uchun oylik summasini bosing.</p>';
+    h+='<p class="muted" style="margin:0">'+(p.rate.fixed?'Kelmagan har bir kun uchun '+money(p.rate.daily,p.rate.cur)+' ayriladi, yarim kunga — '+money(p.rate.daily/2,p.rate.cur)+'.':'Kelmagan kun: oylik ÷ '+p.rate.div+' kun = '+money(p.rate.daily,p.rate.cur)+'.')+' O\'zgartirish uchun oylik summasini bosing.</p>';
     h+='<div class="grid2"><button class="btn ghost" id="xEdit">Ism / telefon</button>'+(x.arch?'<button class="btn" id="xRestore">Qaytarish</button>':'<button class="btn danger" id="xArch">Olib tashlash</button>')+'</div>';
     if(x.arch)h+='<button class="btn danger" id="xDelete">Butunlay o\'chirish</button>';
     const r=$('sheet');r.innerHTML=h;
@@ -439,6 +476,6 @@ function seedDemo(){
   demo.oy=[{id:'o1',xid:'s1',type:'avans',amount:1000000,date:m+'-05',month:m,created:now},{id:'o2',xid:'s1',type:'kelmadi',days:1,date:m+'-08',month:m,created:now},{id:'o3',xid:'s1',type:'kelmadi',days:0.5,date:m+'-15',month:m,created:now}];
   demo.esl=[{id:'e1',text:'Soliqni to\'lash',at:now+2*3600e3,done:false,created:now}];
 }
-window.__daftar={S,payroll,people,salaryFor};
+window.__daftar={S,payroll,people,salaryFor,dayRate};
 start();
 })();
