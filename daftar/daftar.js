@@ -160,6 +160,7 @@ const gear='<button class="icon-btn" id="setBtn" aria-label="Sozlamalar">⚙︎<
 
 function render(){
   if(!signedIn)return;
+  if(locked){lockView();return}
   $('tabs').hidden=false;
   $('tabs').querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
   const y=window.scrollY;
@@ -488,12 +489,107 @@ function settingsSheet(){
   sheet('<h3>Sozlamalar</h3>'
     +field('Kelmagan kun qanday hisoblansin','<select id="sDiv"><option value="days">Oylik ÷ oydagi kunlar soni (28–31)</option><option value="30">Oylik ÷ 30 kun</option><option value="26">Oylik ÷ 26 ish kuni</option></select>')
     +'<p class="muted" style="margin:0">Masalan, 5 000 000 so\'m oylik, 31 kunlik oyda 1 kun kelmasa: −'+group(5e6/31)+' so\'m.</p>'
+    +'<button class="btn ghost" id="sSec">🔒 Kod va barmoq izi'+(hasPin()?' ✓':'')+'</button>'
     +'<a class="btn ghost" style="text-decoration:none" href="../rahbar/">Eski rahbar paneli (xodimlar arxivi)</a>'
     +'<div class="muted">Kirgan: '+esc(userEmail)+'</div>'
     +'<div class="actions"><button class="btn danger" id="sOut">Chiqish</button><button class="btn" id="sSave">Saqlash</button></div>',
   ()=>{$('sDiv').value=S.set.div||'days';
+    $('sSec').onclick=securitySheet;
     $('sSave').onclick=()=>{save(store.saveSet({div:$('sDiv').value}),'Saqlandi');closeSheet()};
     $('sOut').onclick=()=>{closeSheet();if(DEMO)return;unsubs.forEach(u=>u());unsubs=[];auth.signOut()}});
+}
+
+/* ---------- Kod va barmoq izi bilan qulflash ----------
+   Kod shu telefonda saqlanadi (faqat xeshi). Barmoq izi — telefonning o'z qulfi (WebAuthn).
+   Kodni unutsangiz: "Kodni unutdim" → Google bilan qayta kirasiz, kod o'chadi. */
+const LK={pin:'d_pin',salt:'d_pin_salt',bio:'d_bio',at:'d_lock_at'};
+const lsG=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
+const lsS=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
+const lsD=k=>{try{localStorage.removeItem(k)}catch(e){}};
+const LOCK_AFTER=60e3; // ilova 1 daqiqadan ko'p yopiq tursa, qayta kod so'raydi
+const hasPin=()=>!!lsG(LK.pin);
+let locked=hasPin(),pinBuf='',pinTries=0;
+async function hashPin(pin,salt){const d=new TextEncoder().encode(salt+':'+pin);const h=await crypto.subtle.digest('SHA-256',d);return Array.from(new Uint8Array(h),b=>b.toString(16).padStart(2,'0')).join('')}
+const b64=a=>btoa(String.fromCharCode(...new Uint8Array(a))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const unb64=s=>Uint8Array.from(atob(s.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0));
+const rnd=n=>crypto.getRandomValues(new Uint8Array(n));
+async function bioAvailable(){try{return !!(window.PublicKeyCredential&&await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable())}catch(e){return false}}
+async function bioRegister(){
+  const c=await navigator.credentials.create({publicKey:{challenge:rnd(32),rp:{name:'Daftarcha',id:location.hostname},
+    user:{id:rnd(16),name:userEmail||'egasi',displayName:'Daftarcha'},pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+    authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'discouraged'},timeout:60000,attestation:'none'}});
+  lsS(LK.bio,b64(c.rawId));
+}
+async function bioUnlock(){
+  const id=lsG(LK.bio);if(!id)return false;
+  try{await navigator.credentials.get({publicKey:{challenge:rnd(32),rpId:location.hostname,allowCredentials:[{type:'public-key',id:unb64(id)}],userVerification:'required',timeout:60000}});return true}
+  catch(e){console.warn(e);return false}
+}
+function unlock(){locked=false;pinBuf='';pinTries=0;$('tabs').hidden=false;render()}
+function lockNow(){if(!hasPin())return;locked=true;pinBuf='';closeSheet();render()}
+function lockView(){
+  $('tabs').hidden=true;
+  const dots=[0,1,2,3].map(i=>'<span class="pdot'+(i<pinBuf.length?' on':'')+'"></span>').join('');
+  const keys=['1','2','3','4','5','6','7','8','9',lsG(LK.bio)?'bio':'','0','del'];
+  app.innerHTML='<div class="wrap lock"><div class="lock-top"><span class="kicker">Daftarcha</span><h1>Kodni kiriting</h1><div class="pdots" id="pdots">'+dots+'</div><p class="minus" id="pMsg" style="margin:0;min-height:20px"></p></div>'
+    +'<div class="pad">'+keys.map(k=>k===''?'<span></span>':'<button class="pkey'+(k==='bio'||k==='del'?' fn':'')+'" data-k="'+k+'" aria-label="'+(k==='bio'?'Barmoq izi':k==='del'?'O\'chirish':k)+'">'+(k==='bio'?'☝︎':k==='del'?'⌫':k)+'</button>').join('')+'</div>'
+    +'<button class="btn ghost sm" id="pForgot" style="align-self:center">Kodni unutdim</button></div>';
+  app.querySelectorAll('.pkey').forEach(b=>b.onclick=()=>pinKey(b.dataset.k));
+  $('pForgot').onclick=()=>{if(!confirm('Kod o\'chiriladi va Google akkauntingiz bilan qayta kirasiz. Davom etilsinmi?'))return;
+    [LK.pin,LK.salt,LK.bio].forEach(lsD);locked=false;unsubs.forEach(u=>u());unsubs=[];auth.signOut()};
+}
+async function pinKey(k){
+  if(k==='bio'){if(await bioUnlock())unlock();else $('pMsg').textContent='Barmoq izi tanilmadi, kodni kiriting';return}
+  if(k==='del')pinBuf=pinBuf.slice(0,-1);else if(pinBuf.length<4)pinBuf+=k;
+  lockView();
+  if(pinBuf.length===4){
+    const ok=(await hashPin(pinBuf,lsG(LK.salt)||''))===lsG(LK.pin);
+    if(ok){unlock();return}
+    pinTries++;pinBuf='';lockView();$('pMsg').textContent='Kod noto\'g\'ri'+(pinTries>=3?' — '+pinTries+'-urinish':'');
+    const d=$('pdots');if(d){d.classList.add('shake');setTimeout(()=>d.classList.remove('shake'),400)}
+  }
+}
+document.addEventListener('visibilitychange',()=>{
+  if(!signedIn||!hasPin())return;
+  if(document.hidden)lsS(LK.at,String(Date.now()));
+  else{const t=Number(lsG(LK.at)||0);if(!locked&&t&&Date.now()-t>LOCK_AFTER)lockNow()}
+});
+function pinSetSheet(step,first){
+  // step 1: yangi kod, step 2: takrorlash
+  let buf='';
+  const draw=msg=>{
+    $('sheet').innerHTML='<div class="grab"></div><div class="row"><h3>'+(step===1?'Yangi 4 xonali kod':'Kodni qayta kiriting')+'</h3><button class="btn sm ghost" id="psBack">Bekor</button></div>'
+      +'<div class="pdots" style="justify-content:center">'+[0,1,2,3].map(i=>'<span class="pdot'+(i<buf.length?' on':'')+'"></span>').join('')+'</div>'
+      +'<p class="minus" style="margin:0;text-align:center;min-height:20px">'+esc(msg||'')+'</p>'
+      +'<div class="pad">'+['1','2','3','4','5','6','7','8','9','','0','del'].map(k=>k===''?'<span></span>':'<button class="pkey'+(k==='del'?' fn':'')+'" data-k="'+k+'">'+(k==='del'?'⌫':k)+'</button>').join('')+'</div>';
+    $('psBack').onclick=securitySheet;
+    $('sheet').querySelectorAll('.pkey').forEach(b=>b.onclick=async()=>{const k=b.dataset.k;
+      if(k==='del')buf=buf.slice(0,-1);else if(buf.length<4)buf+=k;
+      if(buf.length<4){draw();return}
+      if(step===1){pinSetSheet(2,buf);return}
+      if(buf!==first){buf='';draw('Kodlar mos kelmadi, qaytadan');return}
+      const salt=b64(rnd(12));lsS(LK.salt,salt);lsS(LK.pin,await hashPin(buf,salt));lsD(LK.at);
+      toast('Kod qo\'yildi');securitySheet();
+    })};
+  $('sheet').hidden=false;$('sheetBg').hidden=false;sheetRefresh=null;draw();
+}
+async function securitySheet(){
+  const bioOk=await bioAvailable(),pin=hasPin(),bio=!!lsG(LK.bio);
+  sheet('<h3>Kod va barmoq izi</h3>'
+    +'<p class="muted" style="margin:0;line-height:1.5">Daftarcha ochilganda va 1 daqiqadan ko\'p yopiq turgandan keyin kod so\'raladi. Kod faqat shu telefonda saqlanadi.</p>'
+    +(pin?'<div class="card row" style="flex-direction:row"><span>Kod qo\'yilgan ✓</span><button class="btn sm ghost" id="scChange">O\'zgartirish</button></div>':'<button class="btn" id="scSet">🔒 Kod qo\'yish</button>')
+    +(pin?(bioOk?(bio?'<div class="card row" style="flex-direction:row"><span>Barmoq izi yoqilgan ✓</span><button class="btn sm ghost" id="scBioOff">O\'chirish</button></div>':'<button class="btn ghost" id="scBio">☝︎ Barmoq izi bilan ochishni yoqish</button>'):'<p class="muted" style="margin:0">Bu telefonda yoki brauzerda barmoq izi bilan ochish ishlamaydi. Kod bilan ochiladi.</p>'):'')
+    +(pin?'<button class="btn ghost" id="scLock">Hozir qulflash</button><button class="btn danger" id="scOff">Kodni olib tashlash</button>':'')
+    +'<button class="btn ghost" id="scBack">‹ Sozlamalar</button>',
+  ()=>{
+    if($('scSet'))$('scSet').onclick=()=>pinSetSheet(1);
+    if($('scChange'))$('scChange').onclick=()=>pinSetSheet(1);
+    if($('scBio'))$('scBio').onclick=async()=>{try{await bioRegister();toast('Barmoq izi yoqildi');securitySheet()}catch(e){console.warn(e);toast('Yoqib bo\'lmadi: barmoq izini tasdiqlang')}};
+    if($('scBioOff'))$('scBioOff').onclick=()=>{lsD(LK.bio);toast('Barmoq izi o\'chirildi');securitySheet()};
+    if($('scLock'))$('scLock').onclick=()=>{closeSheet();lockNow()};
+    if($('scOff'))$('scOff').onclick=()=>{if(!confirm('Kod olib tashlansinmi? Daftarcha kodsiz ochiladi.'))return;[LK.pin,LK.salt,LK.bio,LK.at].forEach(lsD);toast('Kod olib tashlandi');securitySheet()};
+    $('scBack').onclick=settingsSheet;
+  });
 }
 
 /* ---------- Kirish ---------- */
@@ -512,15 +608,15 @@ function loginView(msg){
 }
 function start(){
   if('serviceWorker' in navigator&&!DEMO)navigator.serviceWorker.register('../sw.js').catch(()=>{});
-  if(DEMO){signedIn=true;userEmail='demo';seedDemo();Object.keys(demo).forEach(demoEmit);return}
+  if(DEMO){signedIn=true;userEmail='demo';locked=hasPin();seedDemo();Object.keys(demo).forEach(demoEmit);return}
   try{firebase.initializeApp(CFG.firebase);db=firebase.firestore();auth=firebase.auth();
     try{db.enablePersistence({synchronizeTabs:true}).catch(()=>{})}catch(e){}}
   catch(e){app.innerHTML='<div class="wrap"><section class="card"><p>Ilovani ochib bo\'lmadi. Internetni tekshirib, qayta oching.</p></section></div>';return}
   auth.onAuthStateChanged(u=>{
     if(!u){loginView();return}
     if(CFG.ownerEmail&&String(u.email||'').toLowerCase()!==String(CFG.ownerEmail).toLowerCase()){auth.signOut();loginView('Bu daftar sizga tegishli emas: '+(u.email||''));return}
-    signedIn=true;userEmail=u.email||'';
-    app.innerHTML='<div class="wrap">'+header('Yuklanmoqda…')+'</div>';$('tabs').hidden=false;
+    signedIn=true;userEmail=u.email||'';locked=hasPin();
+    if(locked){render()}else{app.innerHTML='<div class="wrap">'+header('Yuklanmoqda…')+'</div>';$('tabs').hidden=false}
     listen();
   });
 }

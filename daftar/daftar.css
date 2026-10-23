@@ -86,3 +86,15 @@ h2{margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:v
 .quote{min-height:calc(100vh - 230px);display:flex;align-items:center;justify-content:center;text-align:center;padding:24px 8px}
 .quote p{margin:0;font-size:30px;line-height:1.35;font-weight:600;text-wrap:balance;color:var(--fg)}
 .quote p::before{content:"“";display:block;font-size:64px;line-height:1;color:var(--accent);margin-bottom:8px}
+/* Qulf ekrani */
+.lock{min-height:100vh;justify-content:space-between;padding-bottom:calc(24px + env(safe-area-inset-bottom))}
+.lock-top{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;margin-top:8vh}
+.pdots{display:flex;gap:16px;justify-content:center}
+.pdot{width:16px;height:16px;border-radius:50%;border:2px solid var(--muted)}
+.pdot.on{background:var(--accent);border-color:var(--accent)}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:300px;width:100%;margin:0 auto}
+.pkey{appearance:none;border:1px solid var(--line);background:var(--card);border-radius:50%;aspect-ratio:1;font-size:28px;font-family:var(--display);font-weight:500;cursor:pointer;color:var(--fg)}
+.pkey:active{background:var(--soft)}
+.pkey.fn{background:none;border-color:transparent;font-size:26px}
+.shake{animation:shake .35s}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-10px)}75%{transform:translateX(10px)}}
