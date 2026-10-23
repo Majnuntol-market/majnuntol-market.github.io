@@ -9,7 +9,7 @@
 <script>
 /* Manzil katta-kichik harf xatosi bilan yozilsa, to'g'ri sahifaga o'tkazadi */
 (function(){
-  var pages=['rahbar'];
+  var pages=['daftar','rahbar'];
   var p=location.pathname.replace(/^\/+|\/+$/g,'').split('/')[0].toLowerCase().replace(/\s+/g,'');
   for(var i=0;i<pages.length;i++){
     if(pages[i].toLowerCase()===p){location.replace('/'+pages[i]+'/');return}

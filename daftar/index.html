@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="uz"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Daftarcha</title>
+<meta name="theme-color" content="#1f7a4d">
+<meta name="robots" content="noindex,nofollow">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Daftarcha">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="daftar.css">
+</head><body>
+<div id="app"><div class="wrap"><header class="hd"><div><span class="kicker">Majnuntol</span><h1>Yuklanmoqda…</h1></div></header></div></div>
+<nav class="tabs" id="tabs" hidden>
+  <button data-t="home"><span class="ti">◉</span>Bosh</button>
+  <button data-t="qarz"><span class="ti">⇄</span>Qarzlar</button>
+  <button data-t="xodim"><span class="ti">☺</span>Xodimlar</button>
+  <button data-t="esl"><span class="ti">⏰</span>Eslatma</button>
+</nav>
+<div class="sheet-bg" id="sheetBg" hidden></div>
+<div class="sheet" id="sheet" hidden></div>
+<div class="toast" id="toast" hidden></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="../config.js"></script>
+<script src="daftar.js"></script>
+</body></html>
