@@ -83,3 +83,6 @@ h2{margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:v
 .stat.tap{appearance:none;cursor:pointer;text-align:left;align-items:flex-start;width:100%;font:inherit;color:inherit}
 .card.month{flex-direction:row;padding:8px}
 .stat .num{white-space:normal;overflow:visible}
+.quote{min-height:calc(100vh - 230px);display:flex;align-items:center;justify-content:center;text-align:center;padding:24px 8px}
+.quote p{margin:0;font-size:30px;line-height:1.35;font-weight:600;text-wrap:balance;color:var(--fg)}
+.quote p::before{content:"“";display:block;font-size:64px;line-height:1;color:var(--accent);margin-bottom:8px}

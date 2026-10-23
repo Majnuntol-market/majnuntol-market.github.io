@@ -173,25 +173,8 @@ function render(){
 }
 
 function viewHome(){
-  const ps=people(),t=totals(ps),now=Date.now(),td=today();
-  const due=S.esl.filter(e=>!e.done&&e.at<=now+864e5).sort((a,b)=>a.at-b.at);
-  const lateQ=ps.filter(p=>p.due&&p.due<=td);
-  const act=S.xod.filter(x=>!x.arch);
-  const pay=zero();act.forEach(x=>addTo(pay,payroll(x,ym()).left));
-  let h=header('Bugun, '+fmtDate(td).slice(0,5),gear);
-  h+='<div class="grid2"><button class="stat tap" data-go="qarz"><span class="muted">Menga qarzdor</span><span class="num plus">'+sumText(t.in)+'</span></button>'
-   +'<button class="stat tap" data-go="qarz"><span class="muted">Men qarzdorman</span><span class="num minus">'+sumText(t.out)+'</span></button></div>';
-  h+='<button class="stat tap" data-go="xodim"><span class="muted">'+MONTHS[+ym().slice(5)-1]+' oyligi, berilishi kerak ('+act.length+' xodim)</span><span class="num big">'+sumText(pay)+'</span></button>';
-  h+='<section class="card"><div class="row"><h2>Eslatmalar</h2><button class="btn sm ghost" data-add="esl">+ Qo\'shish</button></div>';
-  if(!due.length&&!lateQ.length)h+='<div class="empty">Bugunga eslatma yo\'q</div>';
-  else{h+='<div class="list">';
-    due.forEach(e=>h+=eslItem(e));
-    lateQ.forEach(p=>h+='<button class="item" data-person="'+esc(keyName(p.name))+'"><div><div class="t">'+esc(p.name)+'</div><div class="s">Qarz qaytarish muddati: '+fmtDate(p.due)+'</div></div><span class="pill warn">Qarz</span></button>');
-    h+='</div>'}
-  h+='</section>';
-  const recent=[...S.qarz].sort((a,b)=>(b.created||0)-(a.created||0)).slice(0,5);
-  if(recent.length){h+='<section class="card"><h2>Oxirgi qarz yozuvlari</h2><div class="list">'+recent.map(e=>'<button class="item" data-person="'+esc(keyName(e.name))+'"><div><div class="t">'+esc(normName(e.name))+'</div><div class="s">'+QT[e.type][0]+' · '+fmtDate(e.date)+'</div></div><span class="num '+(QT[e.type][1]>0?'plus':'minus')+'">'+money(e.amount,e.cur)+'</span></button>').join('')+'</div></section>'}
-  return h;
+  return '<header class="hd"><div><span class="kicker">Daftarcha</span></div>'+gear+'</header>'
+    +'<section class="quote"><p>Pulga mehr qo\'yma.<br>Lekin isrof ham qilma.</p></section>';
 }
 
 function viewQarz(){
