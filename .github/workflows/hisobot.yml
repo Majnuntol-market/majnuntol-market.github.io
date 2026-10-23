@@ -1,0 +1,35 @@
+name: Spiskalar hisoboti
+
+on:
+  schedule:
+    - cron: "0 19 * * *"   # har kuni 19:00 UTC = 00:00 Toshkent
+  workflow_dispatch:        # Actions sahifasidan qo'lda ishga tushirish
+    inputs:
+      dry_run:
+        description: "Kanalga yubormasdan faqat tekshirish (1 = ha)"
+        default: "0"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hisobot
+  cancel-in-progress: false
+
+jobs:
+  hisobot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Hisobot tayyorlash va kanalga yuborish
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHANNEL_ID: ${{ secrets.TG_CHANNEL_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+        run: python3 hisobot/hisobot.py
