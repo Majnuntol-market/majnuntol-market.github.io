@@ -59,10 +59,10 @@ function demoEmit(col){S[col]=demo[col].map(x=>Object.assign({},x));S.ready[col]
 function listen(){
   unsubs.forEach(u=>u());unsubs=[];
   Object.keys(COL).forEach(k=>{
-    unsubs.push(db.collection(COL[k]).onSnapshot(q=>{S[k]=q.docs.map(d=>Object.assign({id:d.id},d.data()));S.ready[k]=true;render();if(k==='esl')scheduleNotifs();runSetup()},
+    unsubs.push(db.collection(COL[k]).onSnapshot(q=>{S[k]=q.docs.map(d=>Object.assign({id:d.id},d.data()));S.ready[k]=true;render();if(k==='esl')scheduleNotifs();runSetup();runSetup2()},
       e=>{console.error(e);showRulesError()}));
   });
-  unsubs.push(db.collection('d_sozlama').doc('main').onSnapshot(d=>{S.set=Object.assign({div:'days'},d.exists?d.data():{});S.setReady=true;render();runSetup()},()=>{}));
+  unsubs.push(db.collection('d_sozlama').doc('main').onSnapshot(d=>{S.set=Object.assign({div:'days'},d.exists?d.data():{});S.setReady=true;render();runSetup();runSetup2()},()=>{}));
 }
 let rulesErrShown=false;
 function showRulesError(){if(rulesErrShown)return;rulesErrShown=true;
@@ -82,6 +82,19 @@ function runSetup(){
     .then(()=>db.collection('d_sozlama').doc('main').set({setupShox1:true},{merge:true}))
     .then(()=>toast(x.name+': 1 000 000 so\'m + 400 $, kelmagan kun 16 $ — qayta hisoblandi'))
     .catch(e=>{console.error(e);setupBusy=false}); // muvaffaqiyatli bo'lsa, qayta ishga tushmaydi
+}
+/* Bir martalik (egasi so'radi, 23.10.2026): Shoxjaxon oktabrda jami 3 kun kelmagan. Yetmagani bitta yozuv bilan qo'shiladi. */
+let setup2Busy=false;
+function runSetup2(){
+  if(DEMO||setup2Busy||!S.setReady||!S.ready.xod||!S.ready.oy||!S.set.setupShox1||S.set.setupShox2)return;
+  const x=S.xod.find(z=>/^sh[oa][xh]?j[ao][xh]on/.test(keyName(z.name))&&!z.arch);if(!x)return;
+  setup2Busy=true;
+  const have=S.oy.filter(r=>r.xid===x.id&&r.month==='2026-10'&&r.type==='kelmadi').reduce((t,r)=>t+(Number(r.days)||1),0);
+  const need=Math.round((3-have)*2)/2;
+  const w=need>0?db.collection(COL.oy).add({xid:x.id,type:'kelmadi',days:need,date:'2026-10-23',month:'2026-10',note:'Oktabr bo\'yicha jami 3 kun',created:Date.now()}):Promise.resolve();
+  w.then(()=>db.collection('d_sozlama').doc('main').set({setupShox2:true},{merge:true}))
+   .then(()=>toast(need>0?x.name+': oktabrda jami 3 kun kelmadi deb yozildi':x.name+': oktabrda allaqachon '+have+' kun kelmagan, o\'zgartirilmadi'))
+   .catch(e=>{console.error(e);setup2Busy=false});
 }
 const save=(p,ok)=>p.then(()=>{if(ok)toast(ok)}).catch(e=>{console.error(e);toast("Saqlab bo'lmadi: internetni tekshiring")});
 
@@ -331,6 +344,7 @@ function salaryForm(x){
     const p=DEMO?store.update('xod',x.id,r.data):db.collection(COL.xod).doc(x.id).update(r.data);
     save(p,'Saqlandi — '+monthName(r.from)+'dan');xodimSheet(x.id)}});
 }
+const kVal=r=>{const v=segVal(r,'days');if(v!=='n')return Number(v);const n=Number(String($('kDays').value).replace(',','.'));return isFinite(n)&&n>0?Math.round(n*2)/2:0};
 function entryForm(x,type,e){
   e=e||{};
   const isNew=!e.id;type=e.type||type;
@@ -339,7 +353,9 @@ function entryForm(x,type,e){
   // standart valyuta: avans — so'm; to'lov — qoldig'i bor valyuta; jarima — kunlik ayirish valyutasi
   let cur=e.cur||(type==='tolov'?(p.left.UZS>0?'UZS':p.left.USD>0?'USD':'UZS'):type==='jarima'?p.rate.cur:'UZS');
   let body='';
-  if(type==='kelmadi')body=segHtml('days',[['1','To\'liq kun'],['0.5','Yarim kun']],String(e.days||1))
+  const d0=Number(e.days)||1,dv=d0===1?'1':d0===0.5?'0.5':'n';
+  if(type==='kelmadi')body=segHtml('days',[['1','To\'liq kun'],['0.5','Yarim kun'],['n','Necha kun']],dv)
+    +'<label class="f" id="kN"'+(dv==='n'?'':' hidden')+'><span>Necha kun (yarim kun — 0,5)</span><input id="kDays" inputmode="decimal" value="'+(dv==='n'?String(d0).replace('.',','):'2')+'"></label>'
     +'<p class="muted" id="kHint" style="margin:-4px 0 0"></p>'+field('Sana','<input id="eDate" type="date" value="'+(e.date||dateDef)+'">');
   else body='<div style="display:grid;grid-template-columns:1fr 110px;gap:8px">'+field('Summa','<input id="eAmt" class="amount" inputmode="numeric" placeholder="0" value="'+(e.amount?group(e.amount):'')+'">')
     +field('Valyuta','<select id="eCur"><option value="UZS">so\'m</option><option value="USD"'+(cur==='USD'?' selected':'')+'>$</option></select>')+'</div>'
@@ -348,14 +364,14 @@ function entryForm(x,type,e){
   sheet('<h3>'+esc(x.name)+': '+OT[type]+'</h3>'+body
     +'<div class="actions">'+(isNew?'<button class="btn ghost" id="eBack">Bekor</button>':'<button class="btn danger" id="eDel">O\'chirish</button>')+'<button class="btn" id="eSave">Saqlash</button></div>',
   r=>{
-    if(type==='kelmadi'){const h=v=>{$('kHint').textContent=p.rate.daily?'Oylikdan '+money(p.rate.daily*Number(v),p.rate.cur)+' ayriladi':''};segBind(r,'days',h);h(segVal(r,'days'))}
+    if(type==='kelmadi'){const h=()=>{const n=kVal(r);$('kN').hidden=segVal(r,'days')!=='n';$('kHint').textContent=p.rate.daily&&n?'Oylikdan '+money(p.rate.daily*n,p.rate.cur)+' ayriladi':''};segBind(r,'days',h);$('kDays').oninput=h;h()}
     else{
       const fill=()=>{if(type==='tolov'&&isNew){const c=$('eCur').value;$('eAmt').value=p.left[c]>0?group(p.left[c]):''}};
       $('eCur').onchange=fill;fill();
       if(isNew&&type!=='tolov')setTimeout(()=>$('eAmt').focus(),50)}
     $('eSave').onclick=()=>{const date=$('eDate').value||dateDef;
       const d={xid:x.id,type,date,month:date.slice(0,7),note:$('eNote').value.trim()};
-      if(type==='kelmadi')d.days=Number(segVal(r,'days'));else{d.amount=parseAmount($('eAmt').value);d.cur=$('eCur').value;if(!d.amount){toast('Summani yozing');return}}
+      if(type==='kelmadi'){d.days=kVal(r);if(!(d.days>0)){toast('Kunlar sonini yozing');return}}else{d.amount=parseAmount($('eAmt').value);d.cur=$('eCur').value;if(!d.amount){toast('Summani yozing');return}}
       if(d.month!==xMonth)xMonth=d.month;
       if(isNew){d.created=Date.now();save(store.add('oy',d),'Yozildi')}else save(store.update('oy',e.id,d),'Saqlandi');
       xodimSheet(x.id)};
