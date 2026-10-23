@@ -1,58 +1,17 @@
 rules_version = '2';
-// Majnuntol Market — Firestore qoidalari.
+// Majnuntol Market — Firestore qoidalari (xodimlar ilovasi YOPIQ holat, v14).
+// Baza to'liq saqlanadi, lekin faqat rahbar o'qiy va o'zgartira oladi.
 // Firebase Console → Firestore Database → Rules bo'limiga to'liq nusxalab qo'ying va "Publish" bosing.
+// Xodimlar uchun ochiq eski qoidalar Git'dagi "arxiv-v13" branch'ida saqlangan.
 service cloud.firestore {
   match /databases/{database}/documents {
     function isOwner() {
       return request.auth != null && request.auth.token.email.lower() == 'adaruvgyh@gmail.com';
     }
-    function staffExists(id) {
-      return exists(/databases/$(database)/documents/staff/$(id));
-    }
 
-    // Xodim sahifasi: havolasi bor odam o'qiydi, faqat rahbar o'zgartiradi
-    match /staff/{id} {
-      allow get: if true;
-      allow list, write: if isOwner();
-
-      // Qo'shimcha ish javoblari va bajarilgan vazifalar (xodim yozadi, rahbar o'qiydi)
-      match /answers/{a} {
-        allow read: if isOwner();
-        allow create, update: if staffExists(id);
-        allow delete: if isOwner();
-      }
-
-      // Vazifa rasmlari (xodim yuboradi, rahbar baholaydi)
-      match /photos/{p} {
-        allow read: if true;
-        allow create, update: if staffExists(id)
-          && request.resource.data.keys().hasOnly(['img', 'at', 'task', 'text', 'date'])
-          && request.resource.data.img is string
-          && request.resource.data.img.size() < 900000;
-        allow delete: if isOwner();
-      }
-    }
-
-    // Rahbar panelidagi "baholanmagan rasmlar" hisobi uchun
-    match /{path=**}/photos/{p} {
-      allow read: if isOwner();
-    }
-
-    // Jamoa chati
-    match /chat/{m} {
-      allow read: if true;
-      allow create: if request.resource.data.keys().hasOnly(['uid', 'name', 'text', 'at'])
-        && request.resource.data.text is string
-        && request.resource.data.text.size() > 0
-        && request.resource.data.text.size() <= 1000
-        && (request.resource.data.uid != 'admin' || isOwner());
-      allow update, delete: if isOwner();
-    }
-
-    // Ilova yangilanishi: rahbar yuboradi, xodimlar o'qiydi
-    match /settings/update {
-      allow read: if true;
-      allow write: if isOwner();
+    // Hamma narsa (xodimlar, javoblar, rasmlar, chat, sozlamalar) — faqat rahbar
+    match /{document=**} {
+      allow read, write: if isOwner();
     }
   }
 }

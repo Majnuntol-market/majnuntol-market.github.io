@@ -204,7 +204,7 @@ async function notify(title,body,tag){
 
 /* ---------- Yangilanish ---------- */
 // MUHIM: har safar ilova o'zgartirilganda APP_V va version.json dagi "v" bittaga oshiriladi.
-const APP_V=13;
+const APP_V=14;
 let updShown=false;
 async function checkUpdate(){
   try{const r=await fetch(PAGE.root+'version.json?t='+Date.now(),{cache:'no-store'});if(!r.ok)return;const j=await r.json();
