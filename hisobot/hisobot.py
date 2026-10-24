@@ -392,6 +392,15 @@ def _gh(method, path, data=None):
                 headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"})
 
 
+def _ensure_branch():
+    """"holat" branch'i bo'lmasa, main'dan yaratadi."""
+    try:
+        _gh("GET", "git/ref/heads/holat")
+    except Exception:
+        main_sha = _gh("GET", "git/ref/heads/main")["object"]["sha"]
+        _gh("POST", "git/refs", {"ref": "refs/heads/holat", "sha": main_sha})
+
+
 def state_get():
     """Oxirgi yuborilgan hisobot sanasi ("holat" branch'idagi hisobot-holat.json)."""
     try:
@@ -407,11 +416,7 @@ def state_put(st):
             sha = _gh("GET", "contents/hisobot-holat.json?ref=holat")["sha"]
         except Exception:
             sha = None
-            try:  # branch yo'q bo'lsa — main'dan yaratamiz
-                main_sha = _gh("GET", "git/ref/heads/main")["object"]["sha"]
-                _gh("POST", "git/refs", {"ref": "refs/heads/holat", "sha": main_sha})
-            except Exception:
-                pass
+            _ensure_branch()
         body = {"message": f"hisobot holati: {st}", "branch": "holat",
                 "content": base64.b64encode(json.dumps(st).encode()).decode()}
         if sha:
@@ -462,6 +467,7 @@ def cache_save(cache):
             sha = _gh("GET", "contents/hisobot-kesh.bin?ref=holat")["sha"]
         except Exception:
             sha = None
+            _ensure_branch()
         body = {"message": "hisobot keshi", "branch": "holat", "content": base64.b64encode(blob.encode()).decode()}
         if sha:
             body["sha"] = sha
