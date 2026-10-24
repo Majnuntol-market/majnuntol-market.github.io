@@ -150,13 +150,33 @@ def gemini_read(key, model, img, mime):
         "contents": [{"parts": [{"text": PROMPT}, {"inline_data": {"mime_type": mime, "data": base64.b64encode(img).decode()}}]}],
         "generationConfig": {"temperature": 0, "response_mime_type": "application/json"},
     }
-    r = http("POST", url, data, headers={"x-goog-api-key": key}, timeout=120)
+    r = http("POST", url, data, headers={"x-goog-api-key": key}, timeout=180)
     try:
         txt = r["candidates"][0]["content"]["parts"][0]["text"]
     except (KeyError, IndexError):
         raise RuntimeError(f"Gemini javobi bo'sh: {json.dumps(r)[:300]}")
     txt = re.sub(r"^```(?:json)?|```$", "", txt.strip()).strip()
     return json.loads(txt)
+
+
+def read_with_retry(key, model, img, mime):
+    """Google band bo'lsa (503, 429, vaqt tugashi) kutib qayta urinadi, oxirida zaxira modelga o'tadi."""
+    models = [model, model, model]
+    lite = re.sub(r"-flash$", "-flash-lite", model)
+    if lite != model:
+        models.append(lite)  # zaxira: yengilroq model
+    last = None
+    for i, m in enumerate(models):
+        try:
+            return gemini_read(key, m, img, mime)
+        except Exception as e:
+            last = e
+            if "HTTP 4" in str(e) and "HTTP 429" not in str(e):
+                raise  # kalit yoki so'rov xatosi — qayta urinishdan foyda yo'q
+            wait = 15 * (i + 1)
+            print(f"  Gemini band ({e}); {wait} s kutib qayta urinaman ({m})")
+            time.sleep(wait)
+    raise last
 
 
 def as_int(v):
@@ -282,7 +302,7 @@ def main():
                 data, path = tg.download(fid)
                 if mime == "image/jpeg" and path.lower().endswith(".png"):
                     mime = "image/png"
-                r.update(gemini_read(key, model, data, mime))
+                r.update(read_with_retry(key, model, data, mime))
             except Exception as e:  # bitta rasm xatosi butun hisobotni to'xtatmasin
                 note(f"Rasm xatosi ({r['vaqt']}): {e}", "warning")
                 r.update({"cheki": True, "oqildi": False, "izoh": "rasmni o'qishda xato"})
