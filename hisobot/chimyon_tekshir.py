@@ -4,7 +4,7 @@
 Telegram'dan so'raydi: getMe (bot nomi) va getWebhookInfo (xabarlar qaysi serverga boradi).
 Natija GitHub Actions sahifasida ko'rinadi; token yashiriladi.
 """
-import json, os, re, sys, urllib.parse, urllib.request
+import json, os, re, sys, urllib.error, urllib.parse, urllib.request
 
 raw = re.sub(r"\s+", "", os.environ.get("CHIMYON_BOT_TOKEN", ""))
 m = re.search(r"\d{5,}:[A-Za-z0-9_-]{30,}", raw)
@@ -15,8 +15,15 @@ tok = m.group(0)
 
 
 def call(method):
-    with urllib.request.urlopen(f"https://api.telegram.org/bot{tok}/{method}", timeout=30) as r:
-        return json.loads(r.read())["result"]
+    try:
+        with urllib.request.urlopen(f"https://api.telegram.org/bot{tok}/{method}", timeout=30) as r:
+            return json.loads(r.read())["result"]
+    except urllib.error.HTTPError as e:
+        body = e.read().decode(errors="replace")[:300]
+        hint = " — token eskirgan yoki noto'g'ri nusxalangan (eng oxirgi /revoke tokenini qo'ying)" if e.code == 401 else ""
+        print(f"::error::Telegram {method}: HTTP {e.code} {body}{hint}".replace(tok, "***"))
+        print(f"::notice::Token boshi: {tok.split(':')[0]}, uzunligi {len(tok)}")
+        sys.exit(1)
 
 
 def note(msg, level="notice"):
