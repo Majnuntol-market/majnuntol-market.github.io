@@ -123,25 +123,25 @@ Muhim holatlar:
 Raqamlardagi bo'shliq va nuqtalarni olib tashla: "1 628 000" → 1628000; "241.500" → 241500."""
 
 
-def pick_model(key):
-    """Google'dagi mavjud modellardan eng yangi tekin "flash" (rasm o'qiy oladigan) modelni tanlaydi."""
+def pick_models(key):
+    """Google'dagi mavjud tekin "flash" modellar: eng yangisi birinchi, bir versiyada to'liq flash lite'dan oldin.
+    Har bir modelning limiti alohida — biri tugasa keyingisiga o'tamiz."""
     try:
         r = http("GET", f"{GEM}?pageSize=200", headers={"x-goog-api-key": key})
     except Exception as e:
-        print(f"Modellar ro'yxatini olib bo'lmadi ({e}), standart model ishlatiladi")
-        return "gemini-2.5-flash"
-    best = None
+        note(f"Modellar ro'yxatini olib bo'lmadi ({e})", "warning")
+        return ["gemini-2.5-flash"]
+    found = []
     for m in r.get("models", []):
         name = m.get("name", "").split("/")[-1]
         if "generateContent" not in m.get("supportedGenerationMethods", []):
             continue
-        if not re.fullmatch(r"gemini-(\d+(?:\.\d+)?)-flash(-lite)?(-\d{3})?", name):
+        if not re.fullmatch(r"gemini-(\d+(?:\.\d+)?)-flash(-lite)?", name):
             continue  # preview/exp/tts/live/image modellar kerak emas
         v = float(re.match(r"gemini-(\d+(?:\.\d+)?)", name).group(1))
-        score = (v, 0 if "lite" in name else 1)  # bir xil versiyada to'liq flash afzal
-        if best is None or score > best[0]:
-            best = (score, name)
-    return best[1] if best else "gemini-2.5-flash"
+        found.append(((v, 0 if "lite" in name else 1), name))
+    found.sort(reverse=True)
+    return [n for _, n in found] or ["gemini-2.5-flash"]
 
 
 def gemini_read(key, model, img, mime):
@@ -159,33 +159,71 @@ def gemini_read(key, model, img, mime):
     return json.loads(txt)
 
 
-DEADLINE = time.time() + 20 * 60  # 20 daqiqadan keyin qolgan rasmlar "o'qilmadi" bo'ladi
-_dead_models = set()  # kvotasi tugagan modellar — qayta urinmaymiz
+DEADLINE = time.time() + 35 * 60  # undan keyin qolgan rasmlar o'qilmaydi — hisobot yuborilmaydi
+MIN_GAP = 7.0                      # so'rovlar orasida kamida 7 soniya (tekin tarif: daqiqasiga ~10 ta)
+_dead_models = set()               # kunlik limiti tugagan yoki mavjud bo'lmagan modellar
+_last_call = [0.0]
 
 
-def read_with_retry(key, model, img, mime):
-    """Google band bo'lsa qisqa kutib qayta urinadi; kvota tugasa darhol zaxira modelga o'tadi."""
-    lite = re.sub(r"-flash$", "-flash-lite", model)
-    order = [model] + ([lite] if lite != model else []) + ["gemini-2.5-flash"]
-    last = RuntimeError("model yo'q")
-    for m in dict.fromkeys(order):
+class ReadFailed(Exception):
+    """Rasmni texnik sabab bilan o'qib bo'lmadi (limit, tarmoq) — hisobot yuborilmaydi, keyin qayta urinamiz."""
+
+
+def read_with_retry(key, models, img, mime):
+    """Daqiqalik limitda Google aytgan vaqtcha kutadi; kunlik limit tugasa keyingi modelga o'tadi."""
+    last = "model yo'q"
+    for m in models:
         if m in _dead_models:
             continue
-        for attempt in range(2):
+        for attempt in range(6):
             if time.time() > DEADLINE:
-                raise RuntimeError("vaqt tugadi")
+                raise ReadFailed("vaqt tugadi")
+            wait = _last_call[0] + MIN_GAP - time.time()
+            if wait > 0:
+                time.sleep(wait)
+            _last_call[0] = time.time()
             try:
-                return gemini_read(key, m, img, mime)
+                return gemini_read(key, m, img, mime), m
             except Exception as e:
-                last, msg = e, str(e)
-                if "HTTP 429" in msg or "RESOURCE_EXHAUSTED" in msg or "HTTP 404" in msg:
-                    _dead_models.add(m)  # kvota tugagan yoki model yo'q — keyingi modelga
-                    note(f"{m}: {msg[:160]}", "warning")
+                last = msg = str(e)
+                if "HTTP 404" in msg:
+                    _dead_models.add(m)
                     break
-                if "HTTP 4" in msg:
-                    raise  # kalit yoki so'rov xatosi
-                time.sleep(10)
-    raise last
+                if "HTTP 429" in msg or "RESOURCE_EXHAUSTED" in msg:
+                    if re.search(r"PerDay|per day|daily", msg, re.I):
+                        _dead_models.add(m)
+                        note(f"{m}: kunlik limit tugadi, keyingi modelga o'tiladi", "warning")
+                        break
+                    d = re.search(r'"retryDelay":\s*"(\d+)', msg)
+                    time.sleep(min(70, int(d.group(1)) + 2) if d else 35)
+                    continue
+                if re.search(r"HTTP 4\d\d", msg):
+                    raise ReadFailed(msg[:200])  # kalit yoki so'rov xatosi
+                time.sleep(10)  # 5xx, vaqt tugashi, tarmoq
+        else:
+            break  # 6 urinish ham bo'lmadi — keyingi modelga emas, xato
+    raise ReadFailed(last[:200])
+
+
+def read_items(tg, key, models, items, now, label):
+    """(vaqt, file_id, mime) ro'yxatini o'qiydi. Qaytaradi: rows, texnik xatolar soni."""
+    rows, failed = [], 0
+    for when, (fid, mime) in sorted(items, key=lambda x: x[0]):
+        r = {"vaqt": when.strftime("%H:%M") if when.date() == now.date() else when.strftime("%d.%m %H:%M")}
+        try:
+            data, path = tg.download(fid)
+            if mime == "image/jpeg" and path.lower().endswith(".png"):
+                mime = "image/png"
+            res, used = read_with_retry(key, models, data, mime)
+            r.update(res)
+            r["_model"] = used
+        except Exception as e:
+            failed += 1
+            note(f"Rasm o'qilmadi ({label} {r['vaqt']}): {e}", "warning")
+            r.update({"cheki": True, "oqildi": False, "izoh": "texnik xato"})
+        print(f"  {label} {r['vaqt']}: {json.dumps(r, ensure_ascii=False)}", flush=True)
+        rows.append(r)
+    return rows, failed
 
 
 def as_int(v):
@@ -220,7 +258,7 @@ def build_report(day, rows):
     bad = 0
     n = 0
     for r in rows:
-        if not r.get("cheki", True):
+        if r.get("cheki") is False:
             continue
         n += 1
         who = r.get("yetkazuvchi") or r.get("kimga") or "Noma'lum"
@@ -265,15 +303,23 @@ def main():
                  f"boshi raqam: {'ha' if t[:1].isdigit() else 'yo`q'}")
     tg = Telegram(m.group(0))
     key = re.sub(r"\s+", "", env("GEMINI_API_KEY", required=True))
-    model = env("GEMINI_MODEL") or pick_model(key)
-    note(f"Gemini modeli: {model}")
+    models = [env("GEMINI_MODEL")] if env("GEMINI_MODEL") else pick_models(key)
+    note(f"Gemini modellari: {', '.join(models[:4])}")
     # Bir nechta kanal: TG_CHANNEL_ID da vergul bilan, yoki bo'sh bo'lsa — bot admin bo'lgan hamma kanallar
     allowed = {c.strip() for c in (env("TG_CHANNEL_ID") or "").split(",") if c.strip()}
     dry = env("DRY_RUN", "") == "1"
     clear_only = env("CLEAR_ONLY", "") == "1"  # navbatni tozalash: hisobot yubormaydi
+    scheduled = env("GITHUB_EVENT_NAME", "") == "schedule"
 
     now = dt.datetime.now(TZ)
-    cutoff = now  # hozirgacha (21:00) tashlanganlar hisoblanadi; keyingilari ertangi hisobotga
+    day = now.date().isoformat()
+    at21 = now.replace(hour=21, minute=0, second=0, microsecond=0)
+    cutoff = at21 if now >= at21 else now  # 21:00 dan keyingilari ertangi hisobotga
+
+    # Zaxira jadvallar (22:00, 23:00): bugungi hisobot allaqachon yuborilgan bo'lsa — hech narsa qilmaymiz
+    if scheduled and state_get().get("sent") == day:
+        note("Bugungi hisobot allaqachon yuborilgan")
+        return
 
     ups = tg.updates()
     note(f"Telegram: {len(ups)} ta yangilanish")
@@ -283,7 +329,7 @@ def main():
         post = u.get("channel_post") or u.get("edited_channel_post")
         when = dt.datetime.fromtimestamp((post or {}).get("date", 0), TZ) if post else None
         if post and when >= cutoff:
-            keep = True  # ishga tushgandan keyin kelgan xabar — ertangi hisobotga qoladi
+            keep = True  # 21:00 dan keyin kelgan xabar — ertangi hisobotga qoladi
         if keep:
             continue
         last_done = u["update_id"]
@@ -295,40 +341,76 @@ def main():
         titles[cid] = post["chat"].get("title") or cid
         img = image_of(post)
         if img:
-            by_chan.setdefault(cid, []).append((when, post, img))
+            by_chan.setdefault(cid, []).append((when, img))
 
     if clear_only:
         note(f"Navbat tozalandi: {sum(len(v) for v in by_chan.values())} ta rasm hisobotsiz o'tkazib yuborildi")
-        by_chan = {}
+        if last_done is not None:
+            tg.confirm(last_done)
+        return
 
-    day = now.date().isoformat()
-    if not by_chan and not clear_only:
+    if not by_chan:
         note("Bu davrda rasm yo'q — hisobot yuborilmadi")
+    reports, failed = [], 0
     for cid, items in by_chan.items():
-        rows = []
-        for when, post, (fid, mime) in sorted(items, key=lambda x: x[0]):
-            # bugungi bo'lsa faqat soat, kechagi bo'lsa sana bilan
-            r = {"vaqt": when.strftime("%H:%M") if when.date() == now.date() else when.strftime("%d.%m %H:%M")}
-            try:
-                data, path = tg.download(fid)
-                if mime == "image/jpeg" and path.lower().endswith(".png"):
-                    mime = "image/png"
-                r.update(read_with_retry(key, model, data, mime))
-            except Exception as e:  # bitta rasm xatosi butun hisobotni to'xtatmasin
-                note(f"Rasm xatosi ({titles[cid]} {r['vaqt']}): {e}", "warning")
-                r.update({"cheki": True, "oqildi": False, "izoh": "rasmni o'qishda xato"})
-            print(f"  {titles[cid]} {r['vaqt']}: {json.dumps(r, ensure_ascii=False)}")
-            rows.append(r)
-            time.sleep(1)
-        text = build_report(day, rows)
-        print(f"\n[{titles[cid]}]\n" + text + "\n")
-        note(f"{titles[cid]}: {len(rows)} ta rasm; " + " | ".join(f"{r['vaqt']} {as_int(r.get('jami'))}" for r in rows))
+        rows, f = read_items(tg, key, models, items, now, titles[cid])
+        failed += f
+        reports.append((cid, build_report(day, rows)))
+        note(f"{titles[cid]}: {len(rows)} ta rasm, xato {f}; " + " | ".join(f"{r['vaqt']} {as_int(r.get('jami'))}" for r in rows))
+
+    if failed:
+        # Hech narsa yubormaymiz va tasdiqlamaymiz: rasmlar navbatda qoladi, keyingi urinishda qayta o'qiladi
+        note(f"{failed} ta rasm texnik sabab bilan o'qilmadi — hisobot YUBORILMADI, keyinroq qayta urinadi", "error")
+        sys.exit(1)
+
+    for cid, text in reports:
+        print(f"\n[{titles[cid]}]\n{text}\n", flush=True)
         if not dry:
             tg.send(cid, text)
-
-    if last_done is not None and not dry:
-        tg.confirm(last_done)
+    if not dry:
+        if last_done is not None:
+            tg.confirm(last_done)
+        if reports:
+            state_put({"sent": day})
     print("Tayyor.")
+
+
+def _gh(method, path, data=None):
+    tok = os.environ.get("GITHUB_TOKEN")
+    repo = os.environ.get("GITHUB_REPOSITORY")
+    if not tok or not repo:
+        return None
+    return http(method, f"https://api.github.com/repos/{repo}/{path}", data,
+                headers={"Authorization": f"Bearer {tok}", "Accept": "application/vnd.github+json"})
+
+
+def state_get():
+    """Oxirgi yuborilgan hisobot sanasi ("holat" branch'idagi hisobot-holat.json)."""
+    try:
+        r = _gh("GET", "contents/hisobot-holat.json?ref=holat")
+        return json.loads(base64.b64decode(r["content"])) if r else {}
+    except Exception:
+        return {}
+
+
+def state_put(st):
+    try:
+        try:
+            sha = _gh("GET", "contents/hisobot-holat.json?ref=holat")["sha"]
+        except Exception:
+            sha = None
+            try:  # branch yo'q bo'lsa — main'dan yaratamiz
+                main_sha = _gh("GET", "git/ref/heads/main")["object"]["sha"]
+                _gh("POST", "git/refs", {"ref": "refs/heads/holat", "sha": main_sha})
+            except Exception:
+                pass
+        body = {"message": f"hisobot holati: {st}", "branch": "holat",
+                "content": base64.b64encode(json.dumps(st).encode()).decode()}
+        if sha:
+            body["sha"] = sha
+        _gh("PUT", "contents/hisobot-holat.json", body)
+    except Exception as e:
+        note(f"Holatni saqlab bo'lmadi: {e}", "warning")
 
 
 def note(msg, level="notice"):

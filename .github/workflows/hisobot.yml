@@ -3,6 +3,8 @@ name: Spiskalar hisoboti
 on:
   schedule:
     - cron: "0 16 * * *"   # har kuni 16:00 UTC = 21:00 Toshkent
+    - cron: "0 17 * * *"   # zaxira: 22:00 (21:00 dagisi yuborilmagan bo'lsa)
+    - cron: "0 18 * * *"   # zaxira: 23:00
   workflow_dispatch:        # Actions sahifasidan qo'lda ishga tushirish
     inputs:
       dry_run:
@@ -13,7 +15,7 @@ on:
         default: "0"
 
 permissions:
-  contents: read
+  contents: write   # faqat "holat" branch'iga oxirgi hisobot sanasini yozish uchun
 
 concurrency:
   group: hisobot
@@ -22,7 +24,7 @@ concurrency:
 jobs:
   hisobot:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -36,4 +38,5 @@ jobs:
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
           CLEAR_ONLY: ${{ github.event.inputs.clear_only }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: python3 -u hisobot/hisobot.py

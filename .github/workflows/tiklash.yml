@@ -1,0 +1,37 @@
+name: Hisobotni tiklash
+
+on:
+  workflow_dispatch:
+    inputs:
+      from:
+        description: "Qaysi vaqtdan beri (Toshkent), masalan 2026-10-23T21:00"
+        required: true
+      dry_run:
+        description: "1 = faqat tekshirish, kanalga yubormaydi"
+        default: "1"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: hisobot
+  cancel-in-progress: false
+
+jobs:
+  tiklash:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Rasmlarni qayta olish va hisobot
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHANNEL_ID: ${{ secrets.TG_CHANNEL_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FROM: ${{ github.event.inputs.from }}
+          DRY_RUN: ${{ github.event.inputs.dry_run }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 -u hisobot/tiklash.py
