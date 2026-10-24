@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Spiskalar hisoboti.
 
-Har kuni 00:00 (Toshkent) GitHub Actions ishga tushiradi:
-  1. Telegram botidan kanalga o'tgan kunda tashlangan rasmlarni oladi (getUpdates).
+Har kuni 21:00 (Toshkent) GitHub Actions ishga tushiradi:
+  1. Telegram botidan kanalga oxirgi hisobotdan beri tashlangan rasmlarni oladi (getUpdates).
   2. Har bir rasmni Google Gemini'ga yuborib, chekdagi yetkazib beruvchi va jami summani o'qitadi.
   3. Kun bo'yicha jamlab, hisobotni o'sha kanalga yuboradi.
 
@@ -13,7 +13,7 @@ Maxfiy sozlamalar (GitHub → Settings → Secrets → Actions):
 Ixtiyoriy: GEMINI_MODEL (standart: gemini-2.5-flash), DRY_RUN=1 (kanalga yubormay, faqat chiqaradi).
 
 Holat saqlanmaydi: Telegram o'zi qaysi xabarlar qayta ishlanganini eslab qoladi (offset).
-Bugungi (yarim tundan keyingi) rasmlar tasdiqlanmaydi — ertangi hisobotga qoladi.
+Ishga tushgandan keyin kelgan rasmlar tasdiqlanmaydi — ertangi hisobotga qoladi.
 """
 import base64, datetime as dt, json, os, re, sys, time, urllib.error, urllib.parse, urllib.request
 
@@ -186,7 +186,7 @@ def image_of(post):
 
 def build_report(day, rows):
     d = dt.date.fromisoformat(day)
-    lines = [f"📊 <b>{d.day}-{MONTHS[d.month - 1]} {d.year} — kelgan mahsulotlar</b>", ""]
+    lines = [f"📊 <b>{d.day}-{MONTHS[d.month - 1]} {d.year} — kelgan mahsulotlar</b>", "<i>kecha 21:00 dan bugun 21:00 gacha</i>", ""]
     total = paid = 0
     bad = 0
     n = 0
@@ -213,7 +213,7 @@ def build_report(day, rows):
         warn = " ⚠️ qatorlar yig'indisi boshqacha: " + fmt(qy) if qy and abs(qy - jami) > max(1000, jami * 0.01) else ""
         lines.append(f"{n}. {esc(who)} ({tm}) — <b>{fmt(jami)}</b>" + (f" ({', '.join(extra)})" if extra else "") + warn)
     if n == 0:
-        lines.append("Bugun spiska tashlanmadi.")
+        lines.append("Bu davrda spiska tashlanmadi.")
     else:
         lines += ["", f"💰 <b>Jami: {fmt(total)}</b> · {n} ta spiska"]
         if paid and paid != total:
@@ -233,7 +233,7 @@ def main():
     dry = env("DRY_RUN", "") == "1"
 
     now = dt.datetime.now(TZ)
-    cutoff = now.replace(hour=0, minute=0, second=0, microsecond=0)  # bugun 00:00 dan oldingilar hisoblanadi
+    cutoff = now  # hozirgacha (21:00) tashlanganlar hisoblanadi; keyingilari ertangi hisobotga
 
     ups = tg.updates()
     print(f"{len(ups)} ta yangilanish keldi")
@@ -248,26 +248,27 @@ def main():
             return
     print(f"Kanal: {chan}")
 
-    days, last_done, keep = {}, None, False
+    items, last_done, keep = [], None, False
     for u in ups:
         post = u.get("channel_post") or u.get("edited_channel_post")
         when = dt.datetime.fromtimestamp((post or {}).get("date", 0), TZ) if post else None
         if post and when >= cutoff:
-            keep = True  # bugungi xabar — ertaga hisoblanadi, bundan keyingilarni tasdiqlamaymiz
+            keep = True  # ishga tushgandan keyin kelgan xabar — ertangi hisobotga qoladi
         if keep:
             continue
         last_done = u["update_id"]
         if not post or str(post["chat"]["id"]) != chan or u.get("edited_channel_post"):
             continue
         img = image_of(post)
-        if not img:
-            continue
-        days.setdefault(when.date().isoformat(), []).append((when, post, img))
+        if img:
+            items.append((when, post, img))
 
-    for day in sorted(days):
+    day = now.date().isoformat()
+    if items:
         rows = []
-        for when, post, (fid, mime) in sorted(days[day], key=lambda x: x[0]):
-            r = {"vaqt": when.strftime("%H:%M")}
+        for when, post, (fid, mime) in sorted(items, key=lambda x: x[0]):
+            # bugungi bo'lsa faqat soat, kechagi bo'lsa sana bilan
+            r = {"vaqt": when.strftime("%H:%M") if when.date() == now.date() else when.strftime("%d.%m %H:%M")}
             try:
                 data, path = tg.download(fid)
                 if mime == "image/jpeg" and path.lower().endswith(".png"):
@@ -276,15 +277,16 @@ def main():
             except Exception as e:  # bitta rasm xatosi butun hisobotni to'xtatmasin
                 print(f"  rasm xatosi ({r['vaqt']}): {e}")
                 r.update({"cheki": True, "oqildi": False, "izoh": "rasmni o'qishda xato"})
-            print(f"  {day} {r['vaqt']}: {json.dumps(r, ensure_ascii=False)}")
+            print(f"  {r['vaqt']}: {json.dumps(r, ensure_ascii=False)}")
             rows.append(r)
             time.sleep(1)
         text = build_report(day, rows)
         print("\n" + text + "\n")
         if not dry:
             tg.send(chan, text)
+    else:
+        print("Bu davrda rasm yo'q — hisobot yuborilmadi")
 
-    # Rasm bo'lmagan kunlar uchun ham "spiska tashlanmadi" yozilmaydi — shovqin bo'lmasin
     if last_done is not None and not dry:
         tg.confirm(last_done)
     print("Tayyor.")
