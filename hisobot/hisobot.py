@@ -228,7 +228,7 @@ def main():
     tg = Telegram(env("TG_BOT_TOKEN", required=True))
     key = env("GEMINI_API_KEY", required=True)
     model = env("GEMINI_MODEL") or pick_model(key)
-    print(f"Gemini modeli: {model}")
+    note(f"Gemini modeli: {model}")
     chan = env("TG_CHANNEL_ID") or ""
     dry = env("DRY_RUN", "") == "1"
 
@@ -236,7 +236,7 @@ def main():
     cutoff = now  # hozirgacha (21:00) tashlanganlar hisoblanadi; keyingilari ertangi hisobotga
 
     ups = tg.updates()
-    print(f"{len(ups)} ta yangilanish keldi")
+    note(f"Telegram: {len(ups)} ta yangilanish")
     if not chan:
         for u in ups:
             c = (u.get("channel_post") or u.get("my_chat_member", {})).get("chat", {})
@@ -244,7 +244,7 @@ def main():
                 chan = str(c["id"])
                 break
         if not chan:
-            print("Kanal topilmadi: botni kanalga admin qiling va kanalga bitta xabar tashlang, yoki TG_CHANNEL_ID ni sozlang.")
+            note("Kanal topilmadi: botni kanalga admin qiling va kanalga bitta xabar tashlang, yoki TG_CHANNEL_ID ni sozlang.", "warning")
             return
     print(f"Kanal: {chan}")
 
@@ -275,13 +275,14 @@ def main():
                     mime = "image/png"
                 r.update(gemini_read(key, model, data, mime))
             except Exception as e:  # bitta rasm xatosi butun hisobotni to'xtatmasin
-                print(f"  rasm xatosi ({r['vaqt']}): {e}")
+                note(f"Rasm xatosi ({r['vaqt']}): {e}", "warning")
                 r.update({"cheki": True, "oqildi": False, "izoh": "rasmni o'qishda xato"})
             print(f"  {r['vaqt']}: {json.dumps(r, ensure_ascii=False)}")
             rows.append(r)
             time.sleep(1)
         text = build_report(day, rows)
         print("\n" + text + "\n")
+        note(f"{len(rows)} ta rasm o'qildi; " + " | ".join(f"{r['vaqt']} {as_int(r.get('jami'))}" for r in rows))
         if not dry:
             tg.send(chan, text)
     else:
@@ -292,5 +293,19 @@ def main():
     print("Tayyor.")
 
 
+def note(msg, level="notice"):
+    """GitHub Actions sahifasida ko'rinadigan qisqa xabar (maxfiy kalitlarsiz)."""
+    for secret in (os.environ.get("TG_BOT_TOKEN"), os.environ.get("GEMINI_API_KEY")):
+        if secret:
+            msg = msg.replace(secret, "***")
+    print(f"::{level}::{msg[:900]}")
+
+
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception as e:
+        note(f"{type(e).__name__}: {e}", "error")
+        sys.exit(1)
