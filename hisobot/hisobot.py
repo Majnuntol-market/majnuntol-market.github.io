@@ -258,26 +258,18 @@ def main():
     key = re.sub(r"\s+", "", env("GEMINI_API_KEY", required=True))
     model = env("GEMINI_MODEL") or pick_model(key)
     note(f"Gemini modeli: {model}")
-    chan = env("TG_CHANNEL_ID") or ""
+    # Bir nechta kanal: TG_CHANNEL_ID da vergul bilan, yoki bo'sh bo'lsa — bot admin bo'lgan hamma kanallar
+    allowed = {c.strip() for c in (env("TG_CHANNEL_ID") or "").split(",") if c.strip()}
     dry = env("DRY_RUN", "") == "1"
+    clear_only = env("CLEAR_ONLY", "") == "1"  # navbatni tozalash: hisobot yubormaydi
 
     now = dt.datetime.now(TZ)
     cutoff = now  # hozirgacha (21:00) tashlanganlar hisoblanadi; keyingilari ertangi hisobotga
 
     ups = tg.updates()
     note(f"Telegram: {len(ups)} ta yangilanish")
-    if not chan:
-        for u in ups:
-            c = (u.get("channel_post") or u.get("my_chat_member", {})).get("chat", {})
-            if c.get("type") == "channel":
-                chan = str(c["id"])
-                break
-        if not chan:
-            note("Kanal topilmadi: botni kanalga admin qiling va kanalga bitta xabar tashlang, yoki TG_CHANNEL_ID ni sozlang.", "warning")
-            return
-    print(f"Kanal: {chan}")
 
-    items, last_done, keep = [], None, False
+    by_chan, titles, last_done, keep = {}, {}, None, False
     for u in ups:
         post = u.get("channel_post") or u.get("edited_channel_post")
         when = dt.datetime.fromtimestamp((post or {}).get("date", 0), TZ) if post else None
@@ -286,14 +278,24 @@ def main():
         if keep:
             continue
         last_done = u["update_id"]
-        if not post or str(post["chat"]["id"]) != chan or u.get("edited_channel_post"):
+        if not post or u.get("edited_channel_post") or post["chat"].get("type") != "channel":
             continue
+        cid = str(post["chat"]["id"])
+        if allowed and cid not in allowed:
+            continue
+        titles[cid] = post["chat"].get("title") or cid
         img = image_of(post)
         if img:
-            items.append((when, post, img))
+            by_chan.setdefault(cid, []).append((when, post, img))
+
+    if clear_only:
+        note(f"Navbat tozalandi: {sum(len(v) for v in by_chan.values())} ta rasm hisobotsiz o'tkazib yuborildi")
+        by_chan = {}
 
     day = now.date().isoformat()
-    if items:
+    if not by_chan and not clear_only:
+        note("Bu davrda rasm yo'q — hisobot yuborilmadi")
+    for cid, items in by_chan.items():
         rows = []
         for when, post, (fid, mime) in sorted(items, key=lambda x: x[0]):
             # bugungi bo'lsa faqat soat, kechagi bo'lsa sana bilan
@@ -304,18 +306,16 @@ def main():
                     mime = "image/png"
                 r.update(read_with_retry(key, model, data, mime))
             except Exception as e:  # bitta rasm xatosi butun hisobotni to'xtatmasin
-                note(f"Rasm xatosi ({r['vaqt']}): {e}", "warning")
+                note(f"Rasm xatosi ({titles[cid]} {r['vaqt']}): {e}", "warning")
                 r.update({"cheki": True, "oqildi": False, "izoh": "rasmni o'qishda xato"})
-            print(f"  {r['vaqt']}: {json.dumps(r, ensure_ascii=False)}")
+            print(f"  {titles[cid]} {r['vaqt']}: {json.dumps(r, ensure_ascii=False)}")
             rows.append(r)
             time.sleep(1)
         text = build_report(day, rows)
-        print("\n" + text + "\n")
-        note(f"{len(rows)} ta rasm o'qildi; " + " | ".join(f"{r['vaqt']} {as_int(r.get('jami'))}" for r in rows))
+        print(f"\n[{titles[cid]}]\n" + text + "\n")
+        note(f"{titles[cid]}: {len(rows)} ta rasm; " + " | ".join(f"{r['vaqt']} {as_int(r.get('jami'))}" for r in rows))
         if not dry:
-            tg.send(chan, text)
-    else:
-        print("Bu davrda rasm yo'q — hisobot yuborilmadi")
+            tg.send(cid, text)
 
     if last_done is not None and not dry:
         tg.confirm(last_done)
@@ -325,7 +325,8 @@ def main():
 def note(msg, level="notice"):
     """GitHub Actions sahifasida ko'rinadigan qisqa xabar (maxfiy kalitlarsiz)."""
     for secret in (os.environ.get("TG_BOT_TOKEN"), os.environ.get("GEMINI_API_KEY")):
-        if secret:
+        secret = re.sub(r"\s+", "", secret or "")
+        if len(secret) >= 12:
             msg = msg.replace(secret, "***")
     print(f"::{level}::{msg[:900]}")
 

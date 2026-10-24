@@ -8,6 +8,9 @@ on:
       dry_run:
         description: "Kanalga yubormasdan faqat tekshirish (1 = ha)"
         default: "0"
+      clear_only:
+        description: "Navbatni tozalash — hisobot yubormasdan (1 = ha)"
+        default: "0"
 
 permissions:
   contents: read
@@ -32,4 +35,5 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
+          CLEAR_ONLY: ${{ github.event.inputs.clear_only }}
         run: python3 hisobot/hisobot.py
