@@ -225,8 +225,13 @@ def build_report(day, rows):
 
 
 def main():
-    tg = Telegram(env("TG_BOT_TOKEN", required=True))
-    key = env("GEMINI_API_KEY", required=True)
+    # Nusxalashda qo'shilib qolgan bo'sh joy/yangi qatorlarni tozalaymiz
+    raw_tok = env("TG_BOT_TOKEN", required=True)
+    m = re.search(r"\d{5,}:[A-Za-z0-9_-]{30,}", raw_tok)
+    if not m:
+        sys.exit("XATO: TG_BOT_TOKEN noto'g'ri ko'rinishda (12345:ABC... bo'lishi kerak)")
+    tg = Telegram(m.group(0))
+    key = re.sub(r"\s+", "", env("GEMINI_API_KEY", required=True))
     model = env("GEMINI_MODEL") or pick_model(key)
     note(f"Gemini modeli: {model}")
     chan = env("TG_CHANNEL_ID") or ""
