@@ -229,7 +229,11 @@ def main():
     raw_tok = env("TG_BOT_TOKEN", required=True)
     m = re.search(r"\d{5,}:[A-Za-z0-9_-]{30,}", raw_tok)
     if not m:
-        sys.exit("XATO: TG_BOT_TOKEN noto'g'ri ko'rinishda (12345:ABC... bo'lishi kerak)")
+        t = raw_tok.strip()
+        sys.exit("XATO: TG_BOT_TOKEN noto'g'ri ko'rinishda. "
+                 f"Uzunligi {len(t)} belgi (odatda 46), ':' {'bor' if ':' in t else 'yo`q'}, "
+                 f"ichida bo'sh joy {'bor' if re.search(r'\\s', t) else 'yo`q'}, "
+                 f"boshi raqam: {'ha' if t[:1].isdigit() else 'yo`q'}")
     tg = Telegram(m.group(0))
     key = re.sub(r"\s+", "", env("GEMINI_API_KEY", required=True))
     model = env("GEMINI_MODEL") or pick_model(key)
@@ -309,7 +313,10 @@ def note(msg, level="notice"):
 if __name__ == "__main__":
     try:
         main()
-    except SystemExit:
+    except SystemExit as e:
+        if isinstance(e.code, str):
+            note(e.code, "error")
+            sys.exit(1)
         raise
     except Exception as e:
         note(f"{type(e).__name__}: {e}", "error")
