@@ -114,7 +114,13 @@ Faqat JSON qaytar, boshqa hech narsa yozma:
  "tolangan": 0,                  // "Тўлов"/"Сумма к оплате"/"Оплачено" bo'lsa (so'm), bo'lmasa 0
  "qoldiq": 0,                    // "Қолдиқ сумма"/qarz bo'lsa (so'm), bo'lmasa 0
  "izoh": "..."}                  // muammo bo'lsa qisqa izoh (xira, kesilgan va h.k.), bo'lmasa ""
-Raqamlardagi bo'shliq va nuqtalarni olib tashla: "1 628 000" → 1628000."""
+Muhim holatlar:
+- Bosma narxlar ro'yxati bo'lib, miqdorlar va jami QO'LDA (ruchka bilan) yozilgan bo'lsa: "jami" — qo'lda yozilgan
+  umumiy summa (odatda pastda katta yozilgan). Qo'lda yozilgan miqdor bor qatorlarni sanab "qatorlar_soni" ga,
+  miqdor × narx yig'indisini "qatorlar_yigindisi" ga yoz. Miqdori yozilmagan qatorlarni hisoblama.
+- Jami summa yozilmagan bo'lsa, qatorlar yig'indisini "jami" ga yoz va izohga "jami yozilmagan, hisoblandi" deb qo'sh.
+- Raqam aniq ko'rinmasa, taxmin qilma: "oqildi": false.
+Raqamlardagi bo'shliq va nuqtalarni olib tashla: "1 628 000" → 1628000; "241.500" → 241500."""
 
 
 def pick_model(key):
