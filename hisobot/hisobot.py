@@ -226,13 +226,13 @@ def build_report(day, rows):
 
 def main():
     # Nusxalashda qo'shilib qolgan bo'sh joy/yangi qatorlarni tozalaymiz
-    raw_tok = env("TG_BOT_TOKEN", required=True)
+    raw_tok = re.sub(r"\s+", "", env("TG_BOT_TOKEN", required=True))
     m = re.search(r"\d{5,}:[A-Za-z0-9_-]{30,}", raw_tok)
     if not m:
         t = raw_tok.strip()
         sys.exit("XATO: TG_BOT_TOKEN noto'g'ri ko'rinishda. "
                  f"Uzunligi {len(t)} belgi (odatda 46), ':' {'bor' if ':' in t else 'yo`q'}, "
-                 f"ichida bo'sh joy {'bor' if re.search(r'\\s', t) else 'yo`q'}, "
+                 f"ichida bo'sh joy {'bor' if re.search(r'\s', t) else 'yo`q'}, "
                  f"boshi raqam: {'ha' if t[:1].isdigit() else 'yo`q'}")
     tg = Telegram(m.group(0))
     key = re.sub(r"\s+", "", env("GEMINI_API_KEY", required=True))
