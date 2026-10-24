@@ -36,4 +36,4 @@ jobs:
           GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
           CLEAR_ONLY: ${{ github.event.inputs.clear_only }}
-        run: python3 hisobot/hisobot.py
+        run: python3 -u hisobot/hisobot.py

@@ -43,7 +43,7 @@ def http(method, url, data=None, headers=None, timeout=60, raw=False):
                 return b if raw else json.loads(b)
         except urllib.error.HTTPError as e:
             msg = e.read().decode(errors="replace")[:500]
-            if e.code in (429, 500, 502, 503, 504) and attempt < 2:
+            if e.code in (500, 502, 503, 504) and attempt < 1:
                 time.sleep(5 * (attempt + 1))
                 continue
             raise RuntimeError(f"HTTP {e.code}: {msg}") from None
@@ -150,7 +150,7 @@ def gemini_read(key, model, img, mime):
         "contents": [{"parts": [{"text": PROMPT}, {"inline_data": {"mime_type": mime, "data": base64.b64encode(img).decode()}}]}],
         "generationConfig": {"temperature": 0, "response_mime_type": "application/json"},
     }
-    r = http("POST", url, data, headers={"x-goog-api-key": key}, timeout=180)
+    r = http("POST", url, data, headers={"x-goog-api-key": key}, timeout=90)
     try:
         txt = r["candidates"][0]["content"]["parts"][0]["text"]
     except (KeyError, IndexError):
@@ -159,23 +159,32 @@ def gemini_read(key, model, img, mime):
     return json.loads(txt)
 
 
+DEADLINE = time.time() + 20 * 60  # 20 daqiqadan keyin qolgan rasmlar "o'qilmadi" bo'ladi
+_dead_models = set()  # kvotasi tugagan modellar — qayta urinmaymiz
+
+
 def read_with_retry(key, model, img, mime):
-    """Google band bo'lsa (503, 429, vaqt tugashi) kutib qayta urinadi, oxirida zaxira modelga o'tadi."""
-    models = [model, model, model]
+    """Google band bo'lsa qisqa kutib qayta urinadi; kvota tugasa darhol zaxira modelga o'tadi."""
     lite = re.sub(r"-flash$", "-flash-lite", model)
-    if lite != model:
-        models.append(lite)  # zaxira: yengilroq model
-    last = None
-    for i, m in enumerate(models):
-        try:
-            return gemini_read(key, m, img, mime)
-        except Exception as e:
-            last = e
-            if "HTTP 4" in str(e) and "HTTP 429" not in str(e):
-                raise  # kalit yoki so'rov xatosi — qayta urinishdan foyda yo'q
-            wait = 15 * (i + 1)
-            print(f"  Gemini band ({e}); {wait} s kutib qayta urinaman ({m})")
-            time.sleep(wait)
+    order = [model] + ([lite] if lite != model else []) + ["gemini-2.5-flash"]
+    last = RuntimeError("model yo'q")
+    for m in dict.fromkeys(order):
+        if m in _dead_models:
+            continue
+        for attempt in range(2):
+            if time.time() > DEADLINE:
+                raise RuntimeError("vaqt tugadi")
+            try:
+                return gemini_read(key, m, img, mime)
+            except Exception as e:
+                last, msg = e, str(e)
+                if "HTTP 429" in msg or "RESOURCE_EXHAUSTED" in msg or "HTTP 404" in msg:
+                    _dead_models.add(m)  # kvota tugagan yoki model yo'q — keyingi modelga
+                    note(f"{m}: {msg[:160]}", "warning")
+                    break
+                if "HTTP 4" in msg:
+                    raise  # kalit yoki so'rov xatosi
+                time.sleep(10)
     raise last
 
 
@@ -328,7 +337,7 @@ def note(msg, level="notice"):
         secret = re.sub(r"\s+", "", secret or "")
         if len(secret) >= 12:
             msg = msg.replace(secret, "***")
-    print(f"::{level}::{msg[:900]}")
+    print(f"::{level}::{msg[:900]}", flush=True)
 
 
 if __name__ == "__main__":
