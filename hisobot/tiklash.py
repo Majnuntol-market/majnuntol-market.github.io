@@ -24,6 +24,8 @@ def main():
     start = dt.datetime.fromisoformat(H.env("FROM", required=True)).replace(tzinfo=H.TZ)
     now = dt.datetime.now(H.TZ)
     day = H.env("REPORT_DAY") or now.date().isoformat()
+    # Hisobotdan chiqariladigan vaqtlar (bugungi kun, HH:MM), masalan sinov uchun tashlangan rasmlar
+    exclude = {x.strip() for x in (H.env("EXCLUDE_TIMES") or "").split(",") if x.strip()}
     allowed = {c.strip() for c in (H.env("TG_CHANNEL_ID") or "").split(",") if c.strip()}
 
     # 1) navbat: kanallar, eng katta xabar raqami, hali tasdiqlanmagan (ertaga hisoblanadigan) xabarlar
@@ -47,6 +49,8 @@ def main():
     H.note(f"Gemini modellari: {', '.join(models[:4])}")
 
     reports, failed_total = [], 0
+    cache = H.cache_load()
+    H.note(f"Keshda {len(cache)} ta natija")
     for cid, (title, mx) in chans.items():
         owner = next((a["user"]["id"] for a in tg.call("getChatAdministrators", chat_id=cid) if a["status"] == "creator"), None)
         if not owner:
@@ -77,25 +81,35 @@ def main():
                     break  # davr boshidan oldingi xabarlarga yetdik
                 continue
             img = H.image_of(fw)
+            if img and when.strftime("%H:%M") in exclude and when.date() == now.date():
+                H.note(f"{title}: {when:%H:%M} dagi rasm chiqarib tashlandi (sinov)")
+                img = None
             if img:
-                items.append((when, img))
+                items.append((when, img, f"{cid}:{mid}"))
             time.sleep(0.1)
         H.note(f"{title}: {len(items)} ta rasm topildi ({start:%d.%m %H:%M} dan)")
-        rows, f = H.read_items(tg, key, models, items, now, title)
+        rows, f = H.read_items(tg, key, models, items, now, title, cache)
         failed_total += f
-        reports.append((cid, title, H.build_report(day, rows), rows))
-        H.note(f"{title}: xato {f}; " + " | ".join(f"{r['vaqt']} {H.as_int(r.get('jami'))}" for r in rows))
+        reports.append((cid, title, H.build_report(day, rows), rows, owner))
+        H.note(f"{title}: {len(rows)} ta rasm, xato {f}")
         total = sum(H.as_int(r.get("jami")) for r in rows if r.get("oqildi") and r.get("cheki") is not False)
         bad = sum(1 for r in rows if not r.get("oqildi") and r.get("cheki") is not False)
         H.note(f"{title}: JAMI {total:,} so'm, o'qilmagan {bad}".replace(",", " "))
 
+    H.cache_save(cache)
     if failed_total:
         sys.exit(f"{failed_total} ta rasm texnik sabab bilan o'qilmadi — hisobot yuborilmadi")
-    for cid, title, text, rows in reports:
-        print(f"\n[{title}]\n{text}\n", flush=True)
-        if not dry:
+    for cid, title, text, rows, owner in reports:
+        if dry:
+            # Qoralama — faqat kanal egasining shaxsiy chatiga, tekshirish uchun tafsilotlar bilan
+            det = [f"{r['vaqt']}: {H.esc(r.get('yetkazuvchi') or r.get('kimga') or '-')} · chek sanasi {H.esc(r.get('sana') or '-')}"
+                   + (f" · qatorlar {H.fmt(H.as_int(r.get('qatorlar_yigindisi')))}" if H.as_int(r.get('qatorlar_yigindisi')) else "")
+                   + (f" · {H.esc(r.get('izoh'))}" if r.get('izoh') else "") for r in rows]
+            tg.send(owner, f"🧪 <b>QORALAMA — {H.esc(title)}</b> (kanalga hali yuborilmadi)\n\n{text}\n\n<b>Tekshirish uchun:</b>\n" + "\n".join(det))
+            H.note(f"{title}: qoralama egasiga yuborildi")
+        else:
             tg.send(cid, text)
-            H.note(f"{title}: hisobot yuborildi")
+            H.note(f"{title}: hisobot kanalga yuborildi")
     if not dry:
         H.state_put({"sent": day})
 

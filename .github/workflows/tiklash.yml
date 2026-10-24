@@ -6,6 +6,9 @@ on:
       from:
         description: "Qaysi vaqtdan beri (Toshkent), masalan 2026-10-23T21:00"
         required: true
+      exclude:
+        description: "Chiqariladigan vaqtlar (HH:MM, vergul bilan)"
+        default: ""
       dry_run:
         description: "1 = faqat tekshirish, kanalga yubormaydi"
         default: "1"
@@ -33,5 +36,6 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           FROM: ${{ github.event.inputs.from }}
           DRY_RUN: ${{ github.event.inputs.dry_run }}
+          EXCLUDE_TIMES: ${{ github.event.inputs.exclude }}
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 -u hisobot/tiklash.py

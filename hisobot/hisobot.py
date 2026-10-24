@@ -15,7 +15,7 @@ Ixtiyoriy: GEMINI_MODEL (standart: gemini-2.5-flash), DRY_RUN=1 (kanalga yuborma
 Holat saqlanmaydi: Telegram o'zi qaysi xabarlar qayta ishlanganini eslab qoladi (offset).
 Ishga tushgandan keyin kelgan rasmlar tasdiqlanmaydi — ertangi hisobotga qoladi.
 """
-import base64, datetime as dt, json, os, re, sys, time, urllib.error, urllib.parse, urllib.request
+import base64, datetime as dt, hashlib, hmac, json, os, re, sys, time, urllib.error, urllib.parse, urllib.request
 
 TZ = dt.timezone(dt.timedelta(hours=5))  # Asia/Tashkent
 TG = os.environ.get("TG_API", "https://api.telegram.org")  # sinov uchun almashtirish mumkin
@@ -205,23 +205,30 @@ def read_with_retry(key, models, img, mime):
     raise ReadFailed(last[:200])
 
 
-def read_items(tg, key, models, items, now, label):
-    """(vaqt, file_id, mime) ro'yxatini o'qiydi. Qaytaradi: rows, texnik xatolar soni."""
+def read_items(tg, key, models, items, now, label, cache=None):
+    """items: (vaqt, (file_id, mime), kesh_kaliti). Kesh: bir rasm ikki marta o'qilmaydi.
+    Qaytaradi: rows, texnik xatolar soni."""
     rows, failed = [], 0
-    for when, (fid, mime) in sorted(items, key=lambda x: x[0]):
+    for when, (fid, mime), ckey in sorted(items, key=lambda x: x[0]):
         r = {"vaqt": when.strftime("%H:%M") if when.date() == now.date() else when.strftime("%d.%m %H:%M")}
-        try:
-            data, path = tg.download(fid)
-            if mime == "image/jpeg" and path.lower().endswith(".png"):
-                mime = "image/png"
-            res, used = read_with_retry(key, models, data, mime)
-            r.update(res)
-            r["_model"] = used
-        except Exception as e:
-            failed += 1
-            note(f"Rasm o'qilmadi ({label} {r['vaqt']}): {e}", "warning")
-            r.update({"cheki": True, "oqildi": False, "izoh": "texnik xato"})
-        print(f"  {label} {r['vaqt']}: {json.dumps(r, ensure_ascii=False)}", flush=True)
+        hit = (cache or {}).get(ckey) if ckey else None
+        if hit and hit.get("row"):
+            r.update(hit["row"])
+            r["_kesh"] = 1
+        else:
+            try:
+                data, path = tg.download(fid)
+                if mime == "image/jpeg" and path.lower().endswith(".png"):
+                    mime = "image/png"
+                res, used = read_with_retry(key, models, data, mime)
+                r.update(res)
+                r["_model"] = used
+                if cache is not None and ckey:
+                    cache[ckey] = {"ts": int(time.time()), "row": {k: v for k, v in res.items()}}
+            except Exception as e:
+                failed += 1
+                note(f"Rasm o'qilmadi ({label} {r['vaqt']}): {e}", "warning")
+                r.update({"cheki": True, "oqildi": False, "izoh": "texnik xato"})
         rows.append(r)
     return rows, failed
 
@@ -341,7 +348,7 @@ def main():
         titles[cid] = post["chat"].get("title") or cid
         img = image_of(post)
         if img:
-            by_chan.setdefault(cid, []).append((when, img))
+            by_chan.setdefault(cid, []).append((when, img, f"{cid}:{post['message_id']}"))
 
     if clear_only:
         note(f"Navbat tozalandi: {sum(len(v) for v in by_chan.values())} ta rasm hisobotsiz o'tkazib yuborildi")
@@ -352,19 +359,20 @@ def main():
     if not by_chan:
         note("Bu davrda rasm yo'q — hisobot yuborilmadi")
     reports, failed = [], 0
+    cache = cache_load()
     for cid, items in by_chan.items():
-        rows, f = read_items(tg, key, models, items, now, titles[cid])
+        rows, f = read_items(tg, key, models, items, now, titles[cid], cache)
         failed += f
         reports.append((cid, build_report(day, rows)))
-        note(f"{titles[cid]}: {len(rows)} ta rasm, xato {f}; " + " | ".join(f"{r['vaqt']} {as_int(r.get('jami'))}" for r in rows))
+        note(f"{titles[cid]}: {len(rows)} ta rasm, xato {f}")
 
+    cache_save(cache)
     if failed:
         # Hech narsa yubormaymiz va tasdiqlamaymiz: rasmlar navbatda qoladi, keyingi urinishda qayta o'qiladi
         note(f"{failed} ta rasm texnik sabab bilan o'qilmadi — hisobot YUBORILMADI, keyinroq qayta urinadi", "error")
         sys.exit(1)
 
     for cid, text in reports:
-        print(f"\n[{titles[cid]}]\n{text}\n", flush=True)
         if not dry:
             tg.send(cid, text)
     if not dry:
@@ -411,6 +419,55 @@ def state_put(st):
         _gh("PUT", "contents/hisobot-holat.json", body)
     except Exception as e:
         note(f"Holatni saqlab bo'lmadi: {e}", "warning")
+
+
+def _keystream(k, nonce, n):
+    out, c = b"", 0
+    while len(out) < n:
+        out += hashlib.sha256(k + nonce + c.to_bytes(8, "big")).digest()
+        c += 1
+    return out[:n]
+
+
+def _ckey():
+    tok = re.sub(r"\s+", "", os.environ.get("TG_BOT_TOKEN", ""))
+    return hashlib.sha256(b"hisobot-kesh:" + tok.encode()).digest()
+
+
+def cache_load():
+    """O'qilgan rasmlar natijasi ("holat" branch'ida, bot tokeni asosidagi kalit bilan shifrlangan)."""
+    try:
+        r = _gh("GET", "contents/hisobot-kesh.bin?ref=holat")
+        blob = base64.b64decode(base64.b64decode(r["content"]))
+        nonce, ct = blob[:16], blob[16:]
+        mac, ct = ct[:32], ct[32:]
+        if hmac.new(_ckey(), nonce + ct, hashlib.sha256).digest() != mac:
+            return {}
+        pt = bytes(a ^ b for a, b in zip(ct, _keystream(_ckey(), nonce, len(ct))))
+        data = json.loads(pt)
+        old = time.time() - 4 * 86400
+        return {k: v for k, v in data.items() if v.get("ts", 0) > old}
+    except Exception:
+        return {}
+
+
+def cache_save(cache):
+    try:
+        pt = json.dumps(cache, ensure_ascii=False).encode()
+        nonce = os.urandom(16)
+        ct = bytes(a ^ b for a, b in zip(pt, _keystream(_ckey(), nonce, len(pt))))
+        mac = hmac.new(_ckey(), nonce + ct, hashlib.sha256).digest()
+        blob = base64.b64encode(nonce + mac + ct).decode()
+        try:
+            sha = _gh("GET", "contents/hisobot-kesh.bin?ref=holat")["sha"]
+        except Exception:
+            sha = None
+        body = {"message": "hisobot keshi", "branch": "holat", "content": base64.b64encode(blob.encode()).decode()}
+        if sha:
+            body["sha"] = sha
+        _gh("PUT", "contents/hisobot-kesh.bin", body)
+    except Exception as e:
+        note(f"Keshni saqlab bo'lmadi: {e}", "warning")
 
 
 def note(msg, level="notice"):
