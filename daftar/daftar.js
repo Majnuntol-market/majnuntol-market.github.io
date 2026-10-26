@@ -136,12 +136,19 @@ function dayRate(x,k){
 function payroll(x,k){
   const rows=S.oy.filter(r=>r.xid===x.id&&r.month===k).sort((a,b)=>(a.date||'').localeCompare(b.date||'')||(a.created||0)-(b.created||0));
   const sal={UZS:mapFor(x.sal,k),USD:mapFor(x.salUsd,k)},rate=dayRate(x,k);
-  let absent=0;const adv=zero(),bonus=zero(),fine=zero(),paid=zero(),cut=zero(),earned=zero(),left=zero();
+  let absent=0;const adv=zero(),bonus=zero(),fine=zero(),paid=zero(),cut=zero(),earned=zero(),left=zero(),pre=zero();
+  // Ishga kelgan sana: undan oldingi oylarda oylik yo'q, kelgan oyida — kelgan kunidan boshlab (kalendar kunlari bo'yicha)
+  let start=null;
+  if(x.start&&/^\d{4}-\d{2}-\d{2}$/.test(x.start)){const sm=x.start.slice(0,7);
+    if(k<sm){CUR.forEach(c=>{pre[c]=sal[c]});start={date:x.start,worked:0,before:true}}
+    else if(k===sm){const dim=daysIn(k),d=Number(x.start.slice(8,10)),worked=dim-d+1;
+      if(d>1){CUR.forEach(c=>{pre[c]=c==='USD'?Math.round(sal[c]*(d-1)/dim*100)/100:Math.round(sal[c]*(d-1)/dim)})}
+      start={date:x.start,worked,dim}}}
   rows.forEach(r=>{const c=r.cur==='USD'?'USD':'UZS',a=r.amount||0;
     if(r.type==='kelmadi')absent+=Number(r.days)||1;else if(r.type==='avans')adv[c]+=a;else if(r.type==='bonus')bonus[c]+=a;else if(r.type==='jarima')fine[c]+=a;else if(r.type==='tolov')paid[c]+=a});
   cut[rate.cur]=rate.cur==='USD'?Math.round(rate.daily*absent*100)/100:Math.round(rate.daily*absent);
-  CUR.forEach(c=>{earned[c]=sal[c]-cut[c]+bonus[c]-fine[c];left[c]=Math.round((earned[c]-adv[c]-paid[c])*100)/100});
-  return {rows,sal,rate,absent,cut,adv,bonus,fine,paid,earned,left};
+  CUR.forEach(c=>{earned[c]=Math.round((sal[c]-pre[c]-cut[c]+bonus[c]-fine[c])*100)/100;left[c]=Math.round((earned[c]-adv[c]-paid[c])*100)/100});
+  return {rows,sal,rate,absent,cut,adv,bonus,fine,paid,earned,left,pre,start};
 }
 const any=o=>!!(o.UZS||o.USD);
 const addTo=(t,o)=>CUR.forEach(c=>t[c]+=o[c]);
@@ -291,17 +298,17 @@ function personSheet(key){
 }
 
 /* ---------- Xodim formalari ---------- */
-function payFields(x,k){
+function payFields(x,k,noFrom){
   x=x||{};const fu=mapFor(x.cutUsd,k),fz=mapFor(x.cut,k),sz=mapFor(x.sal,k),sd=mapFor(x.salUsd,k);
   return '<div class="grid2">'+field('Oylik, so\'m','<input id="pSz" class="amount" inputmode="numeric" placeholder="0" value="'+(sz?group(sz):'')+'">')
     +field('Oylik, $','<input id="pSd" class="amount" inputmode="numeric" placeholder="0" value="'+(sd?group(sd):'')+'">')+'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 110px;gap:8px">'+field('Kelmagan 1 kun uchun ayriladi','<input id="pCut" class="amount" inputmode="numeric" placeholder="Avtomatik" value="'+(fu?group(fu):fz?group(fz):'')+'">')
     +field('Valyuta','<select id="pCutCur"><option value="USD"'+(fu||(!fz&&sd&&!sz)?' selected':'')+'>$</option><option value="UZS"'+(fz||(!fu&&!(sd&&!sz))?' selected':'')+'>so\'m</option></select>')+'</div>'
     +'<p class="muted" style="margin:-4px 0 0">Yarim kunga buning yarmi ayriladi. Bo\'sh qoldirsangiz, oylikdan avtomatik hisoblanadi.</p>'
-    +field('Qaysi oydan boshlab','<input id="pFrom" type="month" value="'+k+'">');
+    +(noFrom?'':field('Qaysi oydan boshlab','<input id="pFrom" type="month" value="'+k+'">'));
 }
-function readPay(x){
-  x=x||{};const from=$('pFrom').value||xMonth,sz=parseAmount($('pSz').value),sd=parseAmount($('pSd').value),c=parseAmount($('pCut').value),cc=$('pCutCur').value;
+function readPay(x,fromOverride){
+  x=x||{};const from=fromOverride||($('pFrom')&&$('pFrom').value)||xMonth,sz=parseAmount($('pSz').value),sd=parseAmount($('pSd').value),c=parseAmount($('pCut').value),cc=$('pCutCur').value;
   if(!sz&&!sd){toast('Oylikni yozing');return null}
   const put=(m,v)=>{const o=Object.assign({},m||{});o[from]=v;Object.keys(o).forEach(k=>{if(k>from)delete o[k]});return o};
   return {from,data:{sal:put(x.sal,sz),salUsd:put(x.salUsd,sd),cut:put(x.cut,cc==='UZS'?c:0),cutUsd:put(x.cutUsd,cc==='USD'?c:0)}};
@@ -310,15 +317,20 @@ function xodimForm(x){
   x=x||{};
   sheet('<h3>'+(x.id?'Xodimni tahrirlash':'Yangi xodim')+'</h3>'
     +field('Ism','<input id="xName" placeholder="Masalan, Shoxjaxon" value="'+esc(x.name||'')+'">')
-    +(x.id?'':payFields(null,xMonth))
+    +field('Ishga kelgan sana','<input id="xStart" type="date" value="'+esc(x.id?(x.start||''):today())+'">')
+    +'<p class="muted" style="margin:-4px 0 0">'+(x.id?'Bo\'sh qoldirsangiz — ilgaridan ishlaydi, oylik to\'liq hisoblanadi.':'Birinchi oyning maoshi shu kundan boshlab hisoblanadi.')+'</p>'
+    +(x.id?'':payFields(null,xMonth,true))
     +field('Telefon','<input id="xTel" type="tel" placeholder="Ixtiyoriy" value="'+esc(x.tel||'')+'">')
     +'<div class="actions"><button class="btn ghost" '+(x.id?'id="xBack"':'data-close')+'>Bekor</button><button class="btn" id="xSave">Saqlash</button></div>',
   ()=>{if(!x.id)setTimeout(()=>$('xName').focus(),50);
     if($('xBack'))$('xBack').onclick=()=>xodimSheet(x.id);
     $('xSave').onclick=()=>{const name=normName($('xName').value);if(!name){toast('Ismni yozing');return}
-      if(x.id){save(store.update('xod',x.id,{name,tel:$('xTel').value.trim()}),'Saqlandi');xodimSheet(x.id);return}
-      const r=readPay();if(!r)return;
-      save(store.add('xod',Object.assign({name,tel:$('xTel').value.trim(),arch:false,created:Date.now()},r.data)),name+' qo\'shildi');closeSheet()}});
+      const start=$('xStart').value||'';
+      if(x.id){save(store.update('xod',x.id,{name,tel:$('xTel').value.trim(),start}),'Saqlandi');xodimSheet(x.id);return}
+      if(!start){toast('Ishga kelgan sanani kiriting');return}
+      const r=readPay(null,start.slice(0,7));if(!r)return;
+      if(xMonth<start.slice(0,7))xMonth=start.slice(0,7);
+      save(store.add('xod',Object.assign({name,tel:$('xTel').value.trim(),start,arch:false,created:Date.now()},r.data)),name+' qo\'shildi');closeSheet()}});
 }
 function salaryForm(x){
   sheet('<h3>'+esc(x.name)+' oyligi</h3>'+payFields(x,xMonth)
@@ -374,6 +386,8 @@ function xodimSheet(id){
     const totCur=CUR.filter(c=>p.sal[c]||p.left[c]||c==='UZS'&&!p.sal.USD&&!p.left.USD);
     h+='<section class="card calc">'
       +'<div class="row"><span>Oylik</span><button class="btn sm ghost num" id="salEdit">'+salText(p.sal)+' ✎</button></div>'
+      +(p.start&&p.start.before?'<div class="row"><span>Hali ishga kelmagan <span class="muted">('+fmtDate(p.start.date)+' dan)</span></span><span class="num minus">'+neg(p.pre)+'</span></div>':'')
+      +(p.start&&!p.start.before&&any(p.pre)?'<div class="row"><span>Ishga kelgan: '+fmtDate(p.start.date)+' <span class="muted">('+p.start.worked+' / '+p.start.dim+' kun)</span></span><span class="num minus">'+neg(p.pre)+'</span></div>':'')
       +(p.absent?'<div class="row"><span>Kelmadi: '+daysText(p.absent)+' <span class="muted">(kuniga '+money(p.rate.daily,p.rate.cur)+')</span></span><span class="num minus">'+neg(p.cut)+'</span></div>':'')
       +(any(p.bonus)?'<div class="row"><span>Bonus</span><span class="num plus">'+pos(p.bonus)+'</span></div>':'')
       +(any(p.fine)?'<div class="row"><span>Jarima</span><span class="num minus">'+neg(p.fine)+'</span></div>':'')
@@ -390,7 +404,7 @@ function xodimSheet(id){
         return '<button class="item" data-r="'+r.id+'"><div style="min-width:0"><div class="t">'+OT[r.type]+(r.note?' · <span class="muted">'+esc(r.note)+'</span>':'')+'</div><div class="s">'+fmtDate(r.date)+'</div></div><span class="num '+sign+'">'+val+'</span></button>'}).join(''):'<div class="empty">Bu oyda yozuv yo\'q</div>')+'</div></section>';
     h+='<p class="muted" style="margin:0">'+(p.rate.fixed?'Kelmagan har bir kun uchun '+money(p.rate.daily,p.rate.cur)+' ayriladi, yarim kunga — '+money(p.rate.daily/2,p.rate.cur)+'.':'Kelmagan kun: oylik ÷ '+p.rate.div+' kun = '+money(p.rate.daily,p.rate.cur)+'.')+' O\'zgartirish uchun oylik summasini bosing.</p>';
     if(!x.arch)h+='<button class="btn ghost" id="xLink">📱 '+(x.viewKey?'Xodim ilovasi havolasi':'Xodimga ilova berish')+'</button>';
-    h+='<div class="grid2"><button class="btn ghost" id="xEdit">Ism / telefon</button>'+(x.arch?'<button class="btn" id="xRestore">Qaytarish</button>':'<button class="btn danger" id="xArch">Olib tashlash</button>')+'</div>';
+    h+='<div class="grid2"><button class="btn ghost" id="xEdit">Ma\'lumotlar</button>'+(x.arch?'<button class="btn" id="xRestore">Qaytarish</button>':'<button class="btn danger" id="xArch">Olib tashlash</button>')+'</div>';
     if(x.arch)h+='<button class="btn danger" id="xDelete">Butunlay o\'chirish</button>';
     const r=$('sheet');r.innerHTML=h;
     r.querySelectorAll('[data-close]').forEach(b=>b.onclick=closeSheet);
@@ -423,7 +437,8 @@ const viewUrl=k=>new URL('../maosh/#'+k,location.href).href;
 function viewData(x){
   const months={};
   [0,-1,-2].forEach(n=>{const k=shiftMonth(ym(),n),p=payroll(x,k);if(!any(p.sal)&&!p.rows.length)return;
-    months[k]={sal:p.sal,rate:{cur:p.rate.cur,daily:p.rate.cur==='USD'?Math.round(p.rate.daily*100)/100:Math.round(p.rate.daily)},absent:p.absent,cut:p.cut,adv:p.adv,bonus:p.bonus,fine:p.fine,paid:p.paid,earned:p.earned,left:p.left,
+    if(p.start&&p.start.before)return;
+    months[k]={sal:p.sal,pre:p.pre,start:p.start?{date:p.start.date,worked:p.start.worked,dim:p.start.dim}:null,rate:{cur:p.rate.cur,daily:p.rate.cur==='USD'?Math.round(p.rate.daily*100)/100:Math.round(p.rate.daily)},absent:p.absent,cut:p.cut,adv:p.adv,bonus:p.bonus,fine:p.fine,paid:p.paid,earned:p.earned,left:p.left,
       rows:p.rows.map(r=>{const o={type:r.type,date:r.date||''};if(r.type==='kelmadi')o.days=Number(r.days)||1;else{o.amount=r.amount||0;o.cur=r.cur==='USD'?'USD':'UZS'}return o})}});
   return {name:x.name,months};
 }

@@ -39,6 +39,7 @@ function render(){
     +(done?'<div class="ok big">✓ To\'landi</div>':totCur.map(c=>'<div class="num left '+(m.left[c]<0?'minus':'')+'">'+money(m.left[c],c)+'</div>').join(''))+'</section>';
   h+='<section class="card calc">'
     +'<div class="row"><span>Oylik</span><span class="num">'+both(m.sal)+'</span></div>'
+    +(m.start&&m.pre&&any(m.pre)?'<div class="row"><span>Ishga kelgan: '+fmtDate(m.start.date)+' <span class="muted">('+m.start.worked+' / '+m.start.dim+' kun)</span></span><span class="num minus">'+neg(m.pre)+'</span></div>':'')
     +(m.absent?'<div class="row"><span>Kelmagan: '+daysText(m.absent)+' <span class="muted">(kuniga '+money(m.rate.daily,m.rate.cur)+')</span></span><span class="num minus">'+neg(m.cut)+'</span></div>':'')
     +(any(m.bonus)?'<div class="row"><span>Bonus</span><span class="num plus">'+pos(m.bonus)+'</span></div>':'')
     +(any(m.fine)?'<div class="row"><span>Jarima</span><span class="num minus">'+neg(m.fine)+'</span></div>':'')
