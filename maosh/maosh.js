@@ -34,12 +34,13 @@ function render(){
   const totCur=CUR.filter(c=>m.sal[c]||m.left[c]||(c==='UZS'&&!m.sal.USD&&!m.left.USD));
   const done=!any(m.left)&&any(m.paid);
   let h='<header class="hd"><div><span class="kicker">Maoshim</span><h1>'+esc(doc.name)+'</h1></div></header>';
-  h+='<div class="card month" style="flex-direction:row;padding:8px"><button class="icon-btn" id="prev"'+(i>=ks.length-1?' disabled style="opacity:.3"':'')+' aria-label="Oldingi oy">‹</button><b>'+monthName(month)+'</b><button class="icon-btn" id="next"'+(i<=0?' disabled style="opacity:.3"':'')+' aria-label="Keyingi oy">›</button></div>';
+  h+='<div class="card month" style="flex-direction:row;padding:8px"><button class="icon-btn" id="prev"'+(i>=ks.length-1?' disabled style="opacity:.3"':'')+' aria-label="Oldingi oy">‹</button><b>'+(m.label||monthName(month))+'</b><button class="icon-btn" id="next"'+(i<=0?' disabled style="opacity:.3"':'')+' aria-label="Keyingi oy">›</button></div>';
+  if(m.payday&&!m.closed)h+='<p class="muted" style="margin:0;text-align:center">Oylik kuni: <b>'+fmtDate(m.payday)+'</b></p>';
   h+='<section class="card"><span class="muted">'+(done?'Oylik to\'liq berildi':'Qolgan oyligingiz')+'</span>'
     +(done?'<div class="ok big">✓ To\'landi</div>':totCur.map(c=>'<div class="num left '+(m.left[c]<0?'minus':'')+'">'+money(m.left[c],c)+'</div>').join(''))+'</section>';
   h+='<section class="card calc">'
     +'<div class="row"><span>Oylik</span><span class="num">'+both(m.sal)+'</span></div>'
-    +(m.start&&m.pre&&any(m.pre)?'<div class="row"><span>Ishga kelgan: '+fmtDate(m.start.date)+' <span class="muted">('+m.start.worked+' / '+m.start.dim+' kun)</span></span><span class="num minus">'+neg(m.pre)+'</span></div>':'')
+    +(m.L?'<div class="row"><span>Ishlagan: '+m.worked+' / '+m.L+' kun</span><span class="num">'+both(m.base)+'</span></div>':'')
     +(m.absent?'<div class="row"><span>Kelmagan: '+daysText(m.absent)+' <span class="muted">(kuniga '+money(m.rate.daily,m.rate.cur)+')</span></span><span class="num minus">'+neg(m.cut)+'</span></div>':'')
     +(any(m.bonus)?'<div class="row"><span>Bonus</span><span class="num plus">'+pos(m.bonus)+'</span></div>':'')
     +(any(m.fine)?'<div class="row"><span>Jarima</span><span class="num minus">'+neg(m.fine)+'</span></div>':'')
@@ -48,7 +49,7 @@ function render(){
     +(any(m.paid)?'<div class="row"><span>Oylik berildi</span><span class="num minus">'+neg(m.paid)+'</span></div>':'')
     +totCur.map((c,ix)=>'<div class="row'+(ix===0?' tot':'')+'" style="font-weight:700;font-size:16px"><span>'+(m.left[c]<0?'Ortiqcha olingan':'Qoldi')+(totCur.length>1?(c==='USD'?' ($)':' (so\'m)'):'')+'</span><span class="num">'+money(Math.abs(m.left[c]),c)+'</span></div>').join('')
     +'</section>';
-  h+='<section class="card"><h2>'+monthName(month)+' yozuvlari</h2><div class="list">'+(m.rows.length?m.rows.map(r=>{
+  h+='<section class="card"><h2>'+(m.label?'Davr':monthName(month))+' yozuvlari</h2><div class="list">'+(m.rows.length?m.rows.map(r=>{
       const cls=r.type==='bonus'?'plus':r.type==='kelmadi'?'warn':'minus';
       const val=r.type==='kelmadi'?daysText(r.days):(r.type==='bonus'?'+':'−')+money(r.amount,r.cur);
       return '<div class="item static"><div><div class="t">'+(TYPES[r.type]||r.type)+'</div><div class="s">'+fmtDate(r.date)+'</div></div><span class="num '+cls+'">'+val+'</span></div>'}).join(''):'<div class="empty">Bu oyda yozuv yo\'q</div>')+'</div></section>';
