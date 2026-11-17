@@ -478,6 +478,7 @@ function xodimSheet(id){
       +'</section>';
     if(D&&!per.closed)h+='<p class="muted" style="margin:0;line-height:1.45">Oylik kuni: <b>'+fmtDate(addDays(per.nat,1))+'</b>. Muddatidan oldin bersangiz — ishlagan kunlari uchun, ertasidan yangi davr boshlanadi.</p>';
     h+='<div class="grid2"><button class="btn ghost" data-t="avans">💵 Avans berdim</button><button class="btn ghost" data-t="kelmadi">✕ Kelmadi</button><button class="btn ghost" data-t="bonus">+ Bonus</button><button class="btn ghost" data-t="jarima">− Jarima</button></div>';
+    h+='<button class="btn ghost" id="halfDay">½ Yarim kun kelmadi</button>';
     h+='<button class="btn" data-t="tolov">✓ Oylikni berdim'+(D&&!per.closed&&p.upto<per.nat?' ('+p.worked+' kunlik)':'')+'</button>';
     const title=D?'Davr yozuvlari':monthName(xMonth)+' yozuvlari';
     h+='<section class="card"><h2>'+title+'</h2><div class="list">'+(p.rows.length?p.rows.map(r=>{
@@ -496,6 +497,7 @@ function xodimSheet(id){
     else{$('smPrev').onclick=()=>{xMonth=shiftMonth(xMonth,-1);render()};$('smNext').onclick=()=>{xMonth=shiftMonth(xMonth,1);render()}}
     $('salEdit').onclick=()=>salaryForm(x);
     r.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>entryForm(x,b.dataset.t,null,per));
+    if($('halfDay'))$('halfDay').onclick=()=>entryForm(x,'kelmadi',{days:0.5},per);
     r.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>entryForm(x,null,p.rows.find(z=>z.id===b.dataset.r),per));
     $('xEdit').onclick=()=>xodimForm(x);
     if($('xLink'))$('xLink').onclick=()=>linkSheet(x.id);
