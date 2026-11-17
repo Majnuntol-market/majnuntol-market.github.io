@@ -1,7 +1,9 @@
 /* Majnuntol Oromgohi — daftarcha (Majnuntol daftarchasining alohida nusxasi: o'z ma'lumotlari, egasi o'sha) */
 (function(){
 'use strict';
-const CFG=Object.assign({},window.MJ_CONFIG||{},{ownerEmail:(window.OR_CONFIG||{}).ownerEmail||''});
+const CFG=Object.assign({},window.MJ_CONFIG||{},{ownerHash:(window.OR_CONFIG||{}).ownerHash||''});
+// Egasining manzili ochiq kodda saqlanmaydi — faqat SHA-256 izi bilan solishtiriladi
+const sha256hex=async t=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t))),b=>b.toString(16).padStart(2,'0')).join('');
 const $=id=>document.getElementById(id);
 const pad=n=>String(n).padStart(2,'0');
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -708,10 +710,10 @@ function start(){
   try{const fa=firebase.initializeApp(CFG.firebase,'oromgoh');db=fa.firestore();auth=fa.auth();
     try{db.enablePersistence({synchronizeTabs:true}).catch(()=>{})}catch(e){}}
   catch(e){app.innerHTML='<div class="wrap"><section class="card"><p>Ilovani ochib bo\'lmadi. Internetni tekshirib, qayta oching.</p></section></div>';return}
-  auth.onAuthStateChanged(u=>{
+  auth.onAuthStateChanged(async u=>{
     if(!u){loginView();return}
-    if(!CFG.ownerEmail){auth.signOut();loginView('Daftarcha hali sozlanmagan: egasining manzili kiritilmagan.');return}
-    if(String(u.email||'').toLowerCase()!==String(CFG.ownerEmail).toLowerCase()){auth.signOut();loginView('Bu daftar sizga tegishli emas: '+(u.email||''));return}
+    if(!CFG.ownerHash){auth.signOut();loginView('Daftarcha hali sozlanmagan: egasining manzili kiritilmagan.');return}
+    if((await sha256hex(String(u.email||'').trim().toLowerCase()))!==CFG.ownerHash){auth.signOut();loginView('Bu daftar sizga tegishli emas: '+(u.email||''));return}
     signedIn=true;userEmail=u.email||'';locked=hasPin();
     if(locked){render()}else{app.innerHTML='<div class="wrap">'+header('Yuklanmoqda…')+'</div>';$('tabs').hidden=false}
     listen();

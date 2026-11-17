@@ -14,6 +14,9 @@ service cloud.firestore {
       allow read, write: if isOwner();
     }
 
+    // Majnuntol Oromgohi (or_* kolleksiyalari): egasining manzili bu ochiq faylga yozilmaydi —
+    // to'liq qoida faqat Firebase Console'da turadi (isOR funksiyasi + or_view uchun get).
+
     // Xodim ilovasi: maxfiy havola egasi faqat o'zining bitta hujjatini o'qiy oladi (ro'yxat yo'q)
     match /d_view/{key} {
       allow get: if true;
