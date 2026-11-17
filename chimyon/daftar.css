@@ -98,3 +98,5 @@ h2{margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:v
 .pkey.fn{background:none;border-color:transparent;font-size:26px}
 .shake{animation:shake .35s}
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-10px)}75%{transform:translateX(10px)}}
+.del-btn{appearance:none;border:0;background:none;flex:none;width:40px;height:40px;border-radius:10px;font-size:18px;cursor:pointer;opacity:.7}
+.del-btn:active{background:var(--minus-soft);opacity:1}

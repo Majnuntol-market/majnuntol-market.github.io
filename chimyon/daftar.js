@@ -256,13 +256,13 @@ function viewXodim(){
 }
 
 function eslItem(e){const late=e.at<Date.now()&&!e.done;
-  return '<div class="item static'+(e.done?' done':'')+'"><button class="check'+(e.done?' on':'')+'" data-done="'+e.id+'" aria-label="Bajarildi">'+(e.done?'✓':'')+'</button><button class="item" style="border:0;padding:0" data-esl="'+e.id+'"><div style="min-width:0;flex:1"><div class="t">'+esc(e.text)+'</div><div class="s '+(late?'minus':'')+'">'+fmtDT(e.at)+(late?' · vaqti o\'tdi':'')+'</div></div></button></div>'}
+  return '<div class="item static'+(e.done?' done':'')+'"><button class="check'+(e.done?' on':'')+'" data-done="'+e.id+'" aria-label="Bajarildi">'+(e.done?'✓':'')+'</button><button class="item" style="border:0;padding:0" data-esl="'+e.id+'"><div style="min-width:0;flex:1"><div class="t">'+esc(e.text)+'</div><div class="s '+(late?'minus':'')+'">'+fmtDT(e.at)+(late?' · vaqti o\'tdi':'')+'</div></div></button><button class="del-btn" data-del="'+e.id+'" aria-label="O\'chirish" title="O\'chirish">🗑</button></div>'}
 function viewEsl(){
   const open=S.esl.filter(e=>!e.done).sort((a,b)=>a.at-b.at),done=S.esl.filter(e=>e.done).sort((a,b)=>b.at-a.at).slice(0,20);
   let h=header('Eslatmalar',gear);
   if('Notification' in window&&Notification.permission==='default'&&!DEMO)h+='<button class="btn ghost" id="notifOn">🔔 Eslatma vaqtida xabar berishni yoqish</button>';
   h+='<section class="card"><h2>Kutilmoqda</h2><div class="list">'+(open.length?open.map(eslItem).join(''):'<div class="empty">Eslatma yo\'q</div>')+'</div></section>';
-  if(done.length)h+='<section class="card"><h2>Bajarilgan</h2><div class="list">'+done.map(eslItem).join('')+'</div></section>';
+  if(done.length)h+='<section class="card"><div class="row"><h2>Bajarilgan</h2><button class="btn sm danger" id="delDone">Hammasini o\'chirish</button></div><div class="list">'+done.map(eslItem).join('')+'</div></section>';
   return h;
 }
 
@@ -271,6 +271,10 @@ function bindView(){
   app.querySelectorAll('[data-person]').forEach(b=>b.onclick=()=>personSheet(b.dataset.person));
   app.querySelectorAll('[data-x]').forEach(b=>b.onclick=()=>xodimSheet(b.dataset.x));
   app.querySelectorAll('[data-esl]').forEach(b=>b.onclick=()=>eslForm(S.esl.find(e=>e.id===b.dataset.esl)));
+  app.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{const e=S.esl.find(x=>x.id===b.dataset.del);if(!e)return;
+    if(confirm('Bu eslatma o\'chirilsinmi?\n\n'+String(e.text).slice(0,80)+(String(e.text).length>80?'…':'')))save(store.del('esl',e.id),'O\'chirildi')});
+  if($('delDone'))$('delDone').onclick=()=>{const d=S.esl.filter(e=>e.done);
+    if(d.length&&confirm('Bajarilgan '+d.length+' ta eslatma o\'chirilsinmi? Qaytarib bo\'lmaydi.')){d.forEach(e=>store.del('esl',e.id));toast(d.length+' ta eslatma o\'chirildi')}};
   app.querySelectorAll('[data-done]').forEach(b=>b.onclick=()=>{const e=S.esl.find(x=>x.id===b.dataset.done);save(store.update('esl',e.id,{done:!e.done}),e.done?null:'Bajarildi ✓')});
   app.querySelectorAll('[data-add="esl"]').forEach(b=>b.onclick=()=>eslForm());
   const fab=$('fab');if(fab)fab.onclick=()=>tab==='qarz'?qarzForm():tab==='xodim'?xodimForm():eslForm();
@@ -570,7 +574,7 @@ function eslForm(e){
     +field('Qachon','<input id="eAt" type="datetime-local" value="'+msToLocalInput(def)+'">')
     +'<div class="grid3"><button class="btn sm ghost" data-q="0">Bugun 18:00</button><button class="btn sm ghost" data-q="1">Ertaga 9:00</button><button class="btn sm ghost" data-q="7">1 haftadan</button></div>'
     +'<div class="actions">'+(e.id?'<button class="btn danger" id="eDel">O\'chirish</button>':'<button class="btn ghost" data-close>Bekor</button>')+'<button class="btn" id="eSave">Saqlash</button></div>',
-  r=>{if(!e.text)setTimeout(()=>$('eText').focus(),50);
+  r=>{if(!e.text)setTimeout(()=>{if($('eText'))$('eText').focus()},50);
     r.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>{const n=+b.dataset.q;const d=new Date(Date.now()+TZ+n*864e5);const day=d.toISOString().slice(0,10);$('eAt').value=day+'T'+(n===0?'18:00':'09:00')});
     $('eSave').onclick=()=>{const text=$('eText').value.trim();if(!text){toast('Matnni yozing');return}
       const at=$('eAt').value?localInputToMs($('eAt').value):def;
